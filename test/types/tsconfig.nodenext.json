@@ -1,0 +1,8 @@
+// The same type tests with the module resolution of Node.js.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "nodenext",
+    "moduleResolution": "nodenext"
+  }
+}

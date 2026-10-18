@@ -18,7 +18,7 @@ npm accepts a trusted publisher only for a package that is on npm. Thus you publ
 6. In the folder of the new clone, run `npm ci`.
 7. Run `npm test`.
 8. Run `npm pack --dry-run`.
-9. Make sure that the list has only `LICENSE`, `README.md`, `package.json`, and `src/index.js`.
+9. Make sure that the list has only `LICENSE`, `README.md`, `package.json`, `src/index.d.ts`, and `src/index.js`.
 10. Run `npm login`.
 11. Run `npm publish --access public`.
 12. Run `git tag -a v0.1.0 -m v0.1.0`.

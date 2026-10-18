@@ -8,7 +8,9 @@ This is the first version as an npm package. Before this version, you copied the
 
 ### Added
 
-- The npm package `durable-migrations`. It has one ESM export, `runMigrations()`. The package has no dependencies.
+- The npm package `durable-migrations`. It exports one function, `runMigrations()`, and the TypeScript types for this function. The package has no dependencies.
+- Type declarations in `src/index.d.ts`. They export the types `MigrationStorage`, `MigrationLogger`, and `RunMigrationsOptions`. `tsc` reads them through the `"types"` condition in `"exports"` of `package.json`. With `"moduleResolution": "node"`, `tsc` reads the field `"types"` of `package.json`. You do not need to change `tsconfig.json` for the package. See [TypeScript](docs/typescript.md).
+  - If the first argument of `runMigrations()` is `ctx` or `ctx.storage.sql`, `tsc` shows an error at the call. `tsc` also finds other incorrect arguments. See [Errors that tsc finds](docs/typescript.md#errors-that-tsc-finds).
 - A storage check. If `storage` is not an object, the runner throws a `TypeError`. If `storage` does not have the function `transactionSync()`, or if it does not have the property `sql`, the runner also throws a `TypeError`. Examples are `ctx` and `ctx.storage.sql`. The runner does this check first, before it changes the database. The message is: `[migrations] The storage must be ctx.storage, the storage of the Durable Object. Do not give ctx or ctx.storage.sql.`
   - The storage of a class without SQLite passes this check. For this storage, the error from Cloudflare starts with `SQL is not enabled for this Durable Object class.`
   - Before, the runner threw a `TypeError` without `[migrations]`, for example `storage.transactionSync is not a function`.
@@ -23,6 +25,7 @@ This is the first version as an npm package. Before this version, you copied the
 - The option `logger`. The runner sends its log lines and its warnings to this object. The default is `console`.
 - The runner ignores errors from the logger. Thus a logger error does not stop the object and does not cancel the migrations that ran. The runner also ignores a rejected promise from an async logger.
 - Tests that run the runner in workerd with Vitest and `@cloudflare/vitest-plugin`.
+- Type tests in `test/types`. `npm run test:types` runs `tsc` on correct and incorrect calls of `runMigrations()`, in TypeScript and in JavaScript with `// @ts-check`. It does the tests with `"moduleResolution": "bundler"`, with `"nodenext"`, and with `"exactOptionalPropertyTypes": true`. It also checks `src/index.d.ts` without `@cloudflare/workers-types`.
 - An example Worker in `examples/basic`.
 - A CI workflow. On each push to `main` and on each pull request, it runs the tests and builds the example. To build the example, it installs the package as from the registry.
 - A release workflow. It publishes the package to npm with trusted publishing and provenance. It publishes only from a tag that is on `main` and that has the version in `package.json`.

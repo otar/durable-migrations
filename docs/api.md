@@ -1,6 +1,6 @@
 # API
 
-The package exports one function, `runMigrations()`. The documentation calls this function "the runner".
+The package exports one function, `runMigrations()`. The documentation calls this function "the runner". The package also exports TypeScript types. See [TypeScript](typescript.md).
 
 ```js
 runMigrations(storage, migrations, options?)

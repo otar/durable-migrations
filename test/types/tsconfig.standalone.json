@@ -1,0 +1,10 @@
+// The declarations without @cloudflare/workers-types. src/index.d.ts must not
+// use the global types of that package.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": []
+  },
+  "include": [],
+  "files": ["../../src/index.d.ts"]
+}

@@ -1,0 +1,8 @@
+// The same type tests with "exactOptionalPropertyTypes". Then { logger: undefined }
+// is correct only because the type of "logger" contains undefined.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "exactOptionalPropertyTypes": true
+  }
+}

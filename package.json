@@ -22,19 +22,26 @@
   "author": "Otar Chekurishvili",
   "type": "module",
   "exports": {
-    ".": "./src/index.js",
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    },
     "./package.json": "./package.json"
   },
   "main": "./src/index.js",
+  "types": "./src/index.d.ts",
   "files": [
     "src"
   ],
   "sideEffects": false,
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:types": "tsc -p test/types && tsc -p test/types/tsconfig.nodenext.json && tsc -p test/types/tsconfig.exact.json && tsc -p test/types/tsconfig.standalone.json"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "^1.4.4",
+    "@cloudflare/workers-types": "^5.20261018.1",
+    "typescript": "^7.0.2",
     "vitest": "^5.0.5"
   }
 }
