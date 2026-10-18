@@ -37,8 +37,11 @@ jobs:
       - name: Run the tests
         run: npm test
 
-      - name: Show the files in the package
-        run: npm pack --dry-run
+      - name: Run the type tests
+        run: npm run test:types
+
+      - name: Make sure that the package has only the expected files
+        run: npm run check:package
 
   example:
     name: Build the example

@@ -17,8 +17,11 @@ npm accepts a trusted publisher only for a package that is on npm. Thus you publ
 5. Make a new clone of `main`.
 6. In the folder of the new clone, run `npm ci`.
 7. Run `npm test`.
-8. Run `npm pack --dry-run`.
-9. Make sure that the list has only `LICENSE`, `README.md`, `package.json`, `src/index.d.ts`, and `src/index.js`.
+8. Run `npm run test:types`.
+9. Run `npm run check:package`.
+
+   This command makes sure that the package has only `LICENSE`, `README.md`, `package.json`, `src/index.d.ts`, and `src/index.js`. If a file is missing or extra, the command fails.
+
 10. Run `npm login`.
 11. Run `npm publish --access public`.
 12. Run `git tag -a v0.1.0 -m v0.1.0`.
@@ -75,7 +78,7 @@ After the workflow publishes a version with the trusted publisher, you can make 
 
 - If the step **Make sure that the tag is the version in package.json** fails, the tag and the version are different. Remove the tag with `git push origin --delete v0.2.0` and `git tag -d v0.2.0`. Correct the version. Then push the correct tag.
 - If the step **Make sure that the tag is on main** fails, the tagged commit is not on `main`. Remove the tag. Merge the change into `main`. Tag the commit on `main` with the same version. Then push the tag.
-- If the tests fail, or if the example does not build, the workflow does not publish the package. Remove the tag. Correct the error on `main`. Tag the new commit with the same version. Then push the tag.
+- If the tests fail, the workflow does not publish the package. This also applies to the type tests, the check of the package files, and the build of the example. Remove the tag. Correct the error on `main`. Tag the new commit with the same version. Then push the tag.
 - If the step **Publish to npm** fails with `ENEEDAUTH` or `E404 Not Found`, open the trusted publisher on npmjs.com. Compare it with the values in [Add the trusted publisher](#add-the-trusted-publisher). You cannot edit a trusted publisher on npmjs.com. If a value is incorrect, delete the trusted publisher. Add it again. Then, in less than 2 days, select **Re-run jobs** on the page of the workflow run.
 - If the trusted publisher expired, delete it on npmjs.com. Add it again. Then, in less than 2 days, select **Re-run jobs** on the page of the workflow run.
 

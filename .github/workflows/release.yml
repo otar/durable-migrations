@@ -55,6 +55,12 @@ jobs:
       - name: Run the tests
         run: npm test
 
+      - name: Run the type tests
+        run: npm run test:types
+
+      - name: Make sure that the package has only the expected files
+        run: npm run check:package
+
       # These steps do the same check as the job "Build the example" in ci.yml.
       # They install Wrangler. Thus they are in this job, not in the job "Publish".
       # With --install-links, npm packs the package and installs it as from the registry.
