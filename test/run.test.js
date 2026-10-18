@@ -5,6 +5,7 @@ import {
   history,
   migrate,
   migrations,
+  take,
   newObject,
   query,
   recordingLogger,
@@ -55,11 +56,11 @@ describe("a new database", () => {
     expect(logger.warn).not.toHaveBeenCalled();
   });
 
-  it("returns 0 for an empty list and creates an empty table _migrations", async () => {
+  it("returns 0 for an empty object and creates an empty table _migrations", async () => {
     const object = newObject();
     const logger = recordingLogger();
 
-    const version = await migrate(object, [], { logger });
+    const version = await migrate(object, {}, { logger });
 
     expect(version).toBe(0);
     expect(await tableNames(object)).toEqual(["_migrations"]);
@@ -88,10 +89,10 @@ describe("a database that has all migrations", () => {
 describe("a database that has some of the migrations", () => {
   it("runs only the new migrations", async () => {
     const object = newObject();
-    await migrate(object, migrations.slice(0, 1));
+    await migrate(object, take(1));
     const logger = recordingLogger();
 
-    const version = await migrate(object, migrations.slice(0, 2), { logger });
+    const version = await migrate(object, take(2), { logger });
 
     expect(version).toBe(2);
     expect(logger.log.mock.calls).toEqual([["[migrations] Migration 2 (create_orders) ran."]]);
@@ -105,7 +106,7 @@ describe("a database that has some of the migrations", () => {
 
   it("keeps the data of the old migrations", async () => {
     const object = newObject();
-    await migrate(object, migrations.slice(0, 1));
+    await migrate(object, take(1));
     await query(object, "INSERT INTO users (id, name) VALUES (1, 'Ana')");
 
     await migrate(object, migrations);
@@ -121,7 +122,7 @@ describe("the default logger", () => {
 
     try {
       const version = await runInDurableObject(object, (instance, state) =>
-        runMigrations(state.storage, migrations.slice(0, 1)),
+        runMigrations(state.storage, take(1)),
       );
 
       expect(version).toBe(1);
@@ -140,7 +141,7 @@ describe("the default logger", () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
 
     try {
-      const version = await migrate(object, migrations.slice(0, 1), options);
+      const version = await migrate(object, take(1), options);
 
       expect(version).toBe(1);
       expect(log.mock.calls).toEqual([["[migrations] Migration 1 (create_users) ran."]]);
@@ -151,11 +152,11 @@ describe("the default logger", () => {
 
   it("writes the warning with console.warn()", async () => {
     const object = newObject();
-    await migrate(object, migrations.slice(0, 2));
+    await migrate(object, take(2));
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     try {
-      const version = await migrate(object, migrations.slice(0, 1), {});
+      const version = await migrate(object, take(1), {});
 
       expect(version).toBe(2);
       expect(warn.mock.calls).toEqual([
@@ -224,7 +225,7 @@ describe("a logger that throws an error", () => {
       warn: vi.fn(),
     };
 
-    await migrate(object, migrations.slice(0, 2), { logger });
+    await migrate(object, take(2), { logger });
 
     expect(promises).toHaveLength(2);
     for (const promise of promises) {
@@ -234,10 +235,10 @@ describe("a logger that throws an error", () => {
 
   it("returns the database version when warn() throws", async () => {
     const object = newObject();
-    await migrate(object, migrations.slice(0, 2));
+    await migrate(object, take(2));
     const logger = { log: vi.fn(), warn: vi.fn(throwing) };
 
-    const version = await migrate(object, migrations.slice(0, 1), { logger });
+    const version = await migrate(object, take(1), { logger });
 
     expect(version).toBe(2);
     expect(logger.warn).toHaveBeenCalledTimes(1);

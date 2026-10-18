@@ -10,7 +10,7 @@ import {
   history,
   migrate,
   migrateError,
-  migration,
+  take,
   newObject,
   query,
   recordingLogger,
@@ -20,14 +20,10 @@ import {
 // Makes the two tables. If the argument is an ON DELETE action, the foreign key gets it.
 function schema(onDelete) {
   const action = onDelete ? ` ${onDelete}` : "";
-  return [
-    migration(1, "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT);", "create_users"),
-    migration(
-      2,
-      `CREATE TABLE orders (id INTEGER PRIMARY KEY, user_id INTEGER REFERENCES users (id)${action});`,
-      "create_orders",
-    ),
-  ];
+  return {
+    create_users: "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT);",
+    create_orders: `CREATE TABLE orders (id INTEGER PRIMARY KEY, user_id INTEGER REFERENCES users (id)${action});`,
+  };
 }
 
 const SCHEMA = schema();
@@ -54,9 +50,8 @@ const FOREIGN_KEY_ERROR =
 
 // The rebuild order of the README. It copies "users" to "users_old" first.
 // The rebuild makes "name" NOT NULL with a CHECK, and makes "email" unique.
-const COPY_USERS = migration(
-  3,
-  `
+const COPY_USERS = {
+  rebuild_users: `
     PRAGMA defer_foreign_keys = ON;
     CREATE TABLE users_old AS SELECT * FROM users;
     DROP TABLE users;
@@ -65,14 +60,12 @@ const COPY_USERS = migration(
     DROP TABLE users_old;
     CREATE UNIQUE INDEX users_email ON users (email);
   `,
-  "rebuild_users",
-);
+};
 
 // This order also copies "orders". DROP TABLE users runs the ON DELETE action
 // of "orders". Then the copy puts the old rows of "orders" back.
-const COPY_USERS_AND_ORDERS = migration(
-  3,
-  `
+const COPY_USERS_AND_ORDERS = {
+  rebuild_users: `
     PRAGMA defer_foreign_keys = ON;
     CREATE TABLE users_old AS SELECT * FROM users;
     CREATE TABLE orders_old AS SELECT * FROM orders;
@@ -84,8 +77,7 @@ const COPY_USERS_AND_ORDERS = migration(
     DROP TABLE orders_old;
     DROP TABLE users_old;
   `,
-  "rebuild_users",
-);
+};
 
 // This order makes the new table first, and gives it the old name at the end.
 const RENAME_NEW_TABLE = `
@@ -136,7 +128,7 @@ describe("a table rebuild", () => {
   it("keeps the rows and the foreign keys when it copies the table first", async () => {
     const object = await newObjectWithData();
 
-    const result = await migrateAndReadPragma(object, [...SCHEMA, COPY_USERS]);
+    const result = await migrateAndReadPragma(object, { ...SCHEMA, ...COPY_USERS });
 
     expect(result).toEqual({ version: 3, deferForeignKeys: 0 });
     expect(await tableNames(object)).toEqual(["_migrations", "orders", "users"]);
@@ -155,9 +147,9 @@ describe("a table rebuild", () => {
 
   it("can give the new table the old name at the end when PRAGMA defer_foreign_keys is on", async () => {
     const object = await newObjectWithData();
-    const rebuild = migration(3, `PRAGMA defer_foreign_keys = ON;\n${RENAME_NEW_TABLE}`, "rebuild_users");
+    const rebuild = { rebuild_users: `PRAGMA defer_foreign_keys = ON;\n${RENAME_NEW_TABLE}` };
 
-    const version = await migrate(object, [...SCHEMA, rebuild]);
+    const version = await migrate(object, { ...SCHEMA, ...rebuild });
 
     expect(version).toBe(3);
 
@@ -175,9 +167,9 @@ describe("a table rebuild", () => {
 
   it("fails and changes nothing when it drops a table that other rows refer to and PRAGMA defer_foreign_keys is off", async () => {
     const object = await newObjectWithData();
-    const rebuild = migration(3, RENAME_NEW_TABLE, "rebuild_users");
+    const rebuild = { rebuild_users: RENAME_NEW_TABLE };
 
-    const error = await migrateError(object, [...SCHEMA, rebuild]);
+    const error = await migrateError(object, { ...SCHEMA, ...rebuild });
 
     expect(error.message).toMatch(
       /^\[migrations\] Migration 3 \(rebuild_users\) failed\. The database stays at version 2\. Cause: FOREIGN KEY constraint failed/,
@@ -200,7 +192,7 @@ describe("a table rebuild", () => {
     const list = schema(onDelete);
     const object = await newObjectWithData(list);
 
-    const version = await migrate(object, [...list, COPY_USERS]);
+    const version = await migrate(object, { ...list, ...COPY_USERS });
 
     expect(version).toBe(3);
     expect(await users(object)).toEqual(USERS);
@@ -214,7 +206,7 @@ describe("a table rebuild", () => {
       const list = schema(onDelete);
       const object = await newObjectWithData(list);
 
-      const result = await migrateAndReadPragma(object, [...list, COPY_USERS_AND_ORDERS]);
+      const result = await migrateAndReadPragma(object, { ...list, ...COPY_USERS_AND_ORDERS });
 
       expect(result).toEqual({ version: 3, deferForeignKeys: 0 });
       expect(await tableNames(object)).toEqual(["_migrations", "orders", "users"]);
@@ -230,9 +222,9 @@ describe("the foreign key check after the new migrations", () => {
   it("throws and cancels the new migrations when rows break a foreign key", async () => {
     const object = await newObjectWithData();
     const logger = recordingLogger();
-    const deleteUsers = migration(3, "PRAGMA defer_foreign_keys = ON;\nDELETE FROM users;", "delete_users");
+    const deleteUsers = { delete_users: "PRAGMA defer_foreign_keys = ON;\nDELETE FROM users;" };
 
-    const error = await migrateError(object, [...SCHEMA, deleteUsers], { logger });
+    const error = await migrateError(object, { ...SCHEMA, ...deleteUsers }, { logger });
 
     expect(error.constructor).toBe(Error);
     expect(error.message).toBe(FOREIGN_KEY_ERROR);
@@ -244,24 +236,24 @@ describe("the foreign key check after the new migrations", () => {
     expect(await orders(object)).toEqual(ORDERS);
 
     // After a reset, each call through the same stub fails. This stub still operates.
-    const version = await migrate(object, [
+    const version = await migrate(object, {
       ...SCHEMA,
-      migration(3, "CREATE TABLE notes (id INTEGER PRIMARY KEY);", "create_notes"),
-    ]);
+      create_notes: "CREATE TABLE notes (id INTEGER PRIMARY KEY);",
+    });
     expect(version).toBe(3);
     expect(await history(object)).toEqual([...HISTORY, [3, "create_notes"]]);
   });
 
   it("names each table one time", async () => {
-    const list = [
+    const list = {
       ...SCHEMA,
-      migration(3, "CREATE TABLE reviews (id INTEGER PRIMARY KEY, user_id INTEGER REFERENCES users (id));"),
-    ];
+      create_reviews: "CREATE TABLE reviews (id INTEGER PRIMARY KEY, user_id INTEGER REFERENCES users (id));",
+    };
     const object = await newObjectWithData(list);
     await query(object, "INSERT INTO reviews (id, user_id) VALUES (20, 1), (21, 2)");
-    const deleteUsers = migration(4, "PRAGMA defer_foreign_keys = ON;\nDELETE FROM users;", "delete_users");
+    const deleteUsers = { delete_users: "PRAGMA defer_foreign_keys = ON;\nDELETE FROM users;" };
 
-    const error = await migrateError(object, [...list, deleteUsers]);
+    const error = await migrateError(object, { ...list, ...deleteUsers });
 
     const match = error.message.match(
       /^\[migrations\] The new migrations left rows that break a foreign key in these tables: (.+)\. The database stays at version 3\.$/,
@@ -274,9 +266,9 @@ describe("the foreign key check after the new migrations", () => {
     // so the pragma also applies to migration 4.
     const object = await newObjectWithData();
     const logger = recordingLogger();
-    const orphan = migration(4, "INSERT INTO orders (id, user_id) VALUES (13, 99);", "add_order");
+    const orphan = { add_order: "INSERT INTO orders (id, user_id) VALUES (13, 99);" };
 
-    const error = await migrateError(object, [...SCHEMA, COPY_USERS, orphan], { logger });
+    const error = await migrateError(object, { ...SCHEMA, ...COPY_USERS, ...orphan }, { logger });
 
     expect(error.message).toBe(FOREIGN_KEY_ERROR);
     expect(error.cause).toBeUndefined();
@@ -291,13 +283,11 @@ describe("the foreign key check after the new migrations", () => {
     // PRAGMA defer_foreign_keys = OFF clears the count of errors in SQLite.
     // Without the check, the commit succeeds and keeps the orphan rows.
     const object = await newObjectWithData();
-    const deleteUsers = migration(
-      3,
-      "PRAGMA defer_foreign_keys = ON;\nDELETE FROM users;\nPRAGMA defer_foreign_keys = OFF;",
-      "delete_users",
-    );
+    const deleteUsers = {
+      delete_users: "PRAGMA defer_foreign_keys = ON;\nDELETE FROM users;\nPRAGMA defer_foreign_keys = OFF;",
+    };
 
-    const error = await migrateError(object, [...SCHEMA, deleteUsers]);
+    const error = await migrateError(object, { ...SCHEMA, ...deleteUsers });
 
     expect(error.message).toBe(FOREIGN_KEY_ERROR);
     expect(await history(object)).toEqual(HISTORY);
@@ -305,9 +295,9 @@ describe("the foreign key check after the new migrations", () => {
   });
 
   it.each([
-    ["rows break a foreign key", migration(3, "PRAGMA defer_foreign_keys = ON;\nDELETE FROM users;")],
-    ["a later migration fails", migration(3, "PRAGMA defer_foreign_keys = ON;"), migration(4, "DELETE FROM missing_table;")],
-  ])("sets the pragma to OFF after an error when %s", async (title, ...newMigrations) => {
+    ["rows break a foreign key", { migration_3: "PRAGMA defer_foreign_keys = ON;\nDELETE FROM users;" }],
+    ["a later migration fails", { migration_3: "PRAGMA defer_foreign_keys = ON;", migration_4: "DELETE FROM missing_table;" }],
+  ])("sets the pragma to OFF after an error when %s", async (title, newMigrations) => {
     // After the error, a write that breaks a foreign key must fail at once.
     // If the pragma stays on, the write fails only at the commit, and Cloudflare resets the object.
     const object = await newObjectWithData();
@@ -315,7 +305,7 @@ describe("the foreign key check after the new migrations", () => {
     const result = await runInDurableObject(object, (instance, state) => {
       let message;
       try {
-        runMigrations(state.storage, [...SCHEMA, ...newMigrations], { logger: recordingLogger() });
+        runMigrations(state.storage, { ...SCHEMA, ...newMigrations }, { logger: recordingLogger() });
       } catch (error) {
         message = error.message;
       }
@@ -340,14 +330,13 @@ describe("the foreign key check after the new migrations", () => {
     // A foreign key must refer to a primary key or to a column with a unique index.
     // "users.email" has no unique index, so PRAGMA foreign_key_check fails.
     const object = await newObjectWithData();
-    const createTags = migration(
-      3,
-      "PRAGMA defer_foreign_keys = ON;\n" +
+    const createTags = {
+      create_tags:
+        "PRAGMA defer_foreign_keys = ON;\n" +
         "CREATE TABLE tags (id INTEGER PRIMARY KEY, user_email TEXT REFERENCES users (email));",
-      "create_tags",
-    );
+    };
 
-    const error = await migrateError(object, [...SCHEMA, createTags]);
+    const error = await migrateError(object, { ...SCHEMA, ...createTags });
 
     expect(error.constructor).toBe(Error);
     expect(error.cause.message).toMatch(/^foreign key mismatch - "tags" referencing "users"/);
