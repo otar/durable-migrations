@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+# Each "uses:" refers to a full commit SHA, not to a tag.
+# A tag can move to different code, but a commit SHA cannot change.
+# The job "Publish" can get an OIDC token for npm. Code from a moved tag must not get this token.
+# Dependabot updates each commit SHA and its version comment. See .github/dependabot.yml.
 jobs:
   test:
     name: Tests
@@ -18,13 +22,13 @@ jobs:
     steps:
       # The step "Make sure that the tag is on main" needs the history of all branches.
       - name: Get the source code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Install Node.js 24
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           package-manager-cache: false
@@ -86,12 +90,12 @@ jobs:
       id-token: write
     steps:
       - name: Get the source code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Install Node.js 24
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org

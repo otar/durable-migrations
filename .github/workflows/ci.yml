@@ -13,6 +13,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Each "uses:" refers to a full commit SHA, not to a tag.
+# A tag can move to different code, but a commit SHA cannot change.
+# Dependabot updates each commit SHA and its version comment. See .github/dependabot.yml.
 jobs:
   test:
     name: Tests
@@ -20,13 +23,13 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Get the source code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       # Vitest 5 needs Node.js 22.12 or later. The workflow uses Node.js 24.
       - name: Install Node.js 24
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: npm
@@ -52,13 +55,13 @@ jobs:
         working-directory: examples/basic
     steps:
       - name: Get the source code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       # The example has no package-lock.json. Thus the workflow does not use the npm cache.
       - name: Install Node.js 24
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           package-manager-cache: false

@@ -30,6 +30,11 @@ This is the first version as an npm package. Before this version, you copied the
 - An example Worker in `examples/basic`.
 - A CI workflow. It runs on each push to `main` and on each pull request. It runs the tests and the type tests, and it checks the package files. It also builds the example. To build the example, it installs the package as from the registry.
 - A release workflow. It publishes the package to npm with trusted publishing and provenance. It publishes only from a tag that is on `main` and that has the version in `package.json`. Before it publishes, it does the same tests and checks as the CI workflow.
+- The workflows refer to each action by its full commit SHA, with the version in a comment. A tag can move to different code, but a commit SHA cannot change.
+- A Dependabot configuration in `.github/dependabot.yml`. Each week, Dependabot opens pull requests for new versions of the dev dependencies and of the actions.
+  - One pull request contains all version updates of the dev dependencies, because some of them must change together. For example, `vitest` is a peer dependency of `@cloudflare/vitest-plugin`.
+  - `@cloudflare/vitest-plugin` brings workerd, the Workers runtime. Thus the tests run on newer versions of workerd, and they find changes in the runtime that can break the runner.
+  - Dependabot waits 7 days after the release of a new version before it opens a pull request. This wait does not apply to security updates.
 
 ### Changed
 

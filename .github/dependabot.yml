@@ -1,0 +1,34 @@
+# Dependabot opens pull requests for new versions of the dev dependencies and of the actions.
+# See RELEASING.md.
+version: 2
+
+updates:
+  # This entry is for the package.json in the root directory. There is no entry for examples/basic.
+  # The example has no package-lock.json, and it gets this package with "file:../..".
+  # CI installs the newest Wrangler 4.x for the example at each run. Thus the example does not need Dependabot.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    # One pull request contains all the version updates, because some packages must change together.
+    # @cloudflare/vitest-plugin includes workerd, and vitest is a peer dependency of the plugin.
+    # @cloudflare/workers-types gives the types of the workerd APIs.
+    # The group does not apply to security updates.
+    groups:
+      dev-dependencies:
+        patterns:
+          - "*"
+    # Dependabot waits 7 days after a release before it opens a pull request for the new version.
+    # During this time, npm can remove a version that contains malware.
+    # The cooldown does not apply to security updates.
+    cooldown:
+      default-days: 7
+
+  # This entry is for the actions in .github/workflows.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    # Dependabot waits 7 days after a release before it opens a pull request for the new commit SHA.
+    cooldown:
+      default-days: 7
