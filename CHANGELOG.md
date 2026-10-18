@@ -31,7 +31,7 @@ This is the first version as an npm package. Before this version, you copied the
   - The version of a migration is its position in the list. The first key is version 1, the second key is version 2, and more. The list does not contain the versions.
   - The table `_migrations` did not change. Its column `version` contains the position of the migration. The copied runner required version N for item N of the list. Thus the versions that are already in `_migrations` agree with the positions.
   - If two keys have the same name, JavaScript keeps only the last value, and no error occurs. The runner cannot find this error. To find it, put `// @ts-check` on the first line of `migrations.js`. Then your editor shows an error for two keys with the same name. The ESLint rule `no-dupe-keys` also finds them.
-  - Keep all migrations in one object literal. Do not make the list with spread syntax (`...`), `Object.assign()`, or `Object.fromEntries()`. Do not sort the keys. See [Names and order](README.md#names-and-order) in the README.
+  - Keep all migrations in one object literal. Do not make the list with spread syntax (`...`), `Object.assign()`, or `Object.fromEntries()`. Do not sort the keys. See [Names and order](docs/writing-migrations.md#names-and-order).
 - The runner checks the list before the database changes. It throws an error in these conditions:
   - The list is not an object, for example `undefined`. The `TypeError` gives the type.
   - The list is an array, also `[]`. The `TypeError` tells you how to change the array to an object, and it refers to the README. The empty list is `{}`.
@@ -43,14 +43,15 @@ This is the first version as an npm package. Before this version, you copied the
 - At each start, the runner reads all rows of `_migrations`. Before, it read only the highest version.
 - A migration that drops or renames `_migrations`, or that adds a row with its own version to it, now fails with a `[migrations]` error. The error gives the version and the name of the migration. Before, the runner threw the error of SQLite without the name of the migration.
 - The runner reads all rows of the last statement of each migration, but it does not keep them in memory. Before, it kept all rows in memory. A last statement that returned millions of rows used too much memory.
+- The README gives only the quick start, the rules, and a short API. The full documentation is in the folder `docs/`.
 
 ### Fixed
 
-- The README procedure that rebuilds a table. The old procedure failed with `FOREIGN KEY constraint failed` when rows in other tables referred to the table.
+- The procedure that rebuilds a table, in [Rebuild a table](docs/rebuild-a-table.md). The old procedure in the README failed with `FOREIGN KEY constraint failed` when rows in other tables referred to the table.
 
 ### Upgrade from the copied files
 
-In this version, the list of migrations is an object. Thus you must change your list. The steps are in [Upgrade from the copied files](README.md#upgrade-from-the-copied-files) in the README. Before you change the list, do the check of the old names in that section. If an old name does not pass the check, the new format of the list cannot hold your migration history.
+In this version, the list of migrations is an object. Thus you must change your list. The steps are in [Upgrade from the copied files](docs/upgrade-from-copied-files.md). Before you change the list, do the check of the old names on that page. If an old name does not pass the check, the new format of the list cannot hold your migration history.
 
 CAUTION: Before you deploy, make sure that each deployed migration has its old name at its old position in the list. If a name is different, the runner throws an error, and the object does not start.
 
