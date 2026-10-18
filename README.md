@@ -14,26 +14,29 @@ The package exports one function, `runMigrations()`. This README calls this func
    npm install durable-migrations
    ```
 
-2. Make a file `migrations.js` next to your Durable Object class. Put your list of migrations in this file:
+2. Make a file `migrations.js` next to your Durable Object class. Put your list of migrations in this file. Each key is the name of a migration, and each value is its SQL:
 
    ```js
-   export const migrations = [
-     {
-       version: 1,
-       name: "create_users",
-       sql: `
-         CREATE TABLE users (
-           id   INTEGER PRIMARY KEY,
-           name TEXT NOT NULL
-         );
-       `,
-     },
-   ];
+   // @ts-check
+
+   /** @type {Record<string, string>} */
+   export const migrations = {
+     create_users: `
+       CREATE TABLE users (
+         id   INTEGER PRIMARY KEY,
+         name TEXT NOT NULL
+       );
+     `,
+   };
    ```
 
    The package does not include this list. You keep it in your project. [`examples/basic/src/migrations.js`](examples/basic/src/migrations.js) has an example list.
 
-3. If your constructor has `CREATE TABLE` or `CREATE INDEX` statements, move them into migration 1. Keep `IF NOT EXISTS` in these statements.
+   The version of a migration is its position in the list. The first key is migration 1. With the line `// @ts-check`, your editor shows an error for two keys with the same name. See [Names and order](#names-and-order).
+
+   If you copied `migrate.js` into your project before, see [Upgrade from the copied files](#upgrade-from-the-copied-files).
+
+3. If your constructor has `CREATE TABLE` or `CREATE INDEX` statements, move them into migration 1 (the first key). Keep `IF NOT EXISTS` in these statements.
 
    Objects that started with the old constructor already have these tables, but they do not have the table `_migrations`. Thus migration 1 runs on these objects at their next start. Without `IF NOT EXISTS`, migration 1 fails on these objects with `table users already exists`. With `IF NOT EXISTS`, SQLite skips these statements, and the objects keep their old schema. Thus migration 1 must make the same schema as the old constructor.
 
@@ -95,7 +98,27 @@ To use the JSDoc types, add `allowJs` and `maxNodeModuleJsDepth` to `compilerOpt
 }
 ```
 
-Then `tsc` reads the JSDoc types in the package, and it finds incorrect calls of `runMigrations()`. Example: for a version that is a string, `tsc` fails with `error TS2322: Type 'string' is not assignable to type 'number'.`
+Then `tsc` reads the JSDoc types in the package, and it finds incorrect calls of `runMigrations()`. For example, if `migrations.js` has no `@type` line and a value is a number, `tsc` fails at the call of `runMigrations()` with this error:
+
+```
+error TS2345: Argument of type '{ create_users: string; add_users_email: number; }' is not assignable to parameter of type 'Record<string, string>'.
+  Property 'add_users_email' is incompatible with index signature.
+    Type 'number' is not assignable to type 'string'.
+```
+
+With only `allowJs`, `tsc` does not find two keys with the same name in `migrations.js`. To find them, put `// @ts-check` on the first line of `migrations.js`, as in [Install](#install). Then `tsc` and your editor show this error for the second key:
+
+```
+error TS1117: An object literal cannot have multiple properties with the same name.
+```
+
+You do not need to change `tsconfig.json` for `// @ts-check`. Your editor shows the error also in a project without `tsconfig.json`.
+
+Also put `/** @type {Record<string, string>} */` above `export const migrations`, as in [Install](#install). With `// @ts-check` and this line, `tsc` shows the error for a value that is not a string in `migrations.js`. It does not show this error at the call of `runMigrations()`. Example: `error TS2322: Type 'number' is not assignable to type 'string'.`
+
+Without `// @ts-check`, the `@type` line hides the error, and `tsc` shows no error. Thus use the `@type` line only with `// @ts-check`.
+
+`tsc` does not find a name with only digits or the name `__proto__`. If each migration is a separate export of `migrations.js`, `tsc` also does not find `import * as`. See [Names and order](#names-and-order).
 
 To use no types, add a file such as `src/durable-migrations.d.ts` with this line:
 
@@ -116,10 +139,11 @@ The runner runs the migrations that did not run on the object before. It is sync
 ### Parameters
 
 - `storage`: the `ctx.storage` of the Durable Object.
-- `migrations`: an array with all migrations, in order. Each item is an object with these properties:
-  - `version`: a number. Item 1 has version 1, item 2 has version 2, and more.
-  - `name`: a string that is not empty and not only white space. The runner records the name in `_migrations` and compares it at each start.
-  - `sql`: a string that is not empty and not only white space. It can contain more than one statement.
+- `migrations`: an object with all migrations, in order. Each key is the name of a migration, and each value is its SQL:
+  - The version of a migration is its position in the list. The first key is version 1, the second key is version 2, and more.
+  - The name is a string that is not empty and not only white space. It must not contain only digits, and it must not be `__proto__`. The runner records the name in `_migrations` and compares it at each start.
+  - The SQL is a string that is not empty and not only white space. It can contain more than one statement.
+  - The list must be an object literal. Import it by its name, for example `import { migrations } from "./migrations.js"`. See [Names and order](#names-and-order).
 - `options` (optional): an object with this property:
   - `logger` (optional): an object with the functions `log(message)` and `warn(message)`. The default is `console`. The runner ignores errors from these functions.
 
@@ -161,15 +185,22 @@ If the logger writes no lines, you do not see the warning.
 The runner returns the database version after the call:
 
 - If the database version is higher than the last version in the list, the runner returns the database version.
-- In all other conditions, it returns the last version in the list. For an empty list, this is 0.
+- In all other conditions, it returns the last version in the list. For an empty list (`{}`), this is 0.
 
 ### Errors and warnings
 
 The runner throws an error in these conditions. Each message starts with `[migrations]`.
 
-- **The list is not correct.** If `migrations` is not an array, the runner throws a `TypeError`. If an item has an incorrect version, no name, or no SQL, the runner throws an `Error`. Example: `[migrations] Item 2 of the list must have version 2. It has version 3.` The message shows a version that is a string in quotes. Example: `[migrations] Item 1 of the list must have version 1. It has version "1".`
+- **The list is not correct.** The runner finds these errors before it changes the database:
+  - If `migrations` is not an object, the runner throws a `TypeError`. The message gives the type. Example: `[migrations] The list of migrations must be an object. Each key is the name of a migration, and each value is its SQL. It is undefined.`
+  - If `migrations` is an array, the runner throws a `TypeError`. This also applies to an empty array. The message tells you how to change the list: `[migrations] The list of migrations must be an object, not an array. Write each migration as a property, in the same order. The key is the name of the migration, and the value is its SQL. Remove the versions. See "Upgrade from the copied files" in the README.` See [Upgrade from the copied files](#upgrade-from-the-copied-files).
+  - If the prototype of `migrations` is not `Object.prototype`, or if `migrations` has a getter or a setter, the runner throws a `TypeError`. Examples are a module namespace object from `import * as`, a `Map`, a class instance, and an object without a prototype. The message is: `[migrations] The list of migrations must be an object literal. Do not use a module namespace object ("import * as"), a Map, a class instance, an object without a prototype, or getters. A module namespace object can sort its keys. Do not copy it with spread (...) or Object.assign(). Import the list by its name, for example import { migrations } from "./migrations.js".`
+  - If a name contains only digits, the runner throws an `Error`. The message gives no position. Example: `[migrations] The name "42" contains only digits. JavaScript moves keys such as "1" and "42" before all other keys of an object, so the order of the migrations can change. Add a letter to the name, for example "m42".`
+  - If a name is empty or only white space, the runner throws an `Error`. Example: `[migrations] Migration 2 must have a name.`
+  - If the list has a property with the name `__proto__`, for example from `JSON.parse()`, the runner throws an `Error`: `[migrations] Do not use the name "__proto__". In an object literal, JavaScript makes no property for this key, and the migration is lost.`
+  - If a value is not a string, or if it is empty or only white space, the runner throws an `Error`. Example: `[migrations] Migration 2 (add_users_email) must have SQL. The value must be a string that is not empty and not only white space.`
 - **The options are not correct.** If `options` is not an object, the runner throws a `TypeError`. If the logger does not have the functions `log()` and `warn()`, the runner also throws a `TypeError`.
-- **A name is different.** A version in `_migrations` has a different name in the list. The runner throws an `Error`, and no migration runs. Example: `[migrations] Migration 2 ran with the name "add_email". The list has the name "add_users_email" for version 2. Do not change, move, or remove a deployed migration. Give version 2 its old name, and add your change as a new migration.`
+- **A name is different.** A row in `_migrations` has a name that is different from the name at the same position in the list. The runner throws an `Error`, and no migration runs. Example: `[migrations] Migration 2 ran with the name "add_email". The list has the name "add_users_email" at position 2. Do not change, move, or remove a deployed migration. Put "add_email" back at position 2, and add your change as a new migration at the end.`
 - **A migration fails.** SQLite cancels all new migrations, and the runner throws an `Error`. The `cause` property of this error contains the original error. Example: `[migrations] Migration 5 (add_index) failed. The database stays at version 3. Cause: no such table: main.orders: SQLITE_ERROR`
 - **Rows break a foreign key after the new migrations.** If a new migration contains `defer_foreign_keys`, or if `PRAGMA defer_foreign_keys` is ON after the new migrations, the runner runs `PRAGMA foreign_key_check`. If this check finds rows that break a foreign key, SQLite cancels all new migrations, and the runner throws an `Error`. The message gives the tables, not the migration. Example: `[migrations] The new migrations left rows that break a foreign key in these tables: orders. The database stays at version 2.` See [Change a table in a way that ALTER TABLE cannot](#change-a-table-in-a-way-that-alter-table-cannot).
 - **The foreign key check fails.** If `PRAGMA foreign_key_check` fails, SQLite cancels all new migrations, and the runner throws an `Error`. The `cause` property of this error contains the original error. Example: `[migrations] The foreign key check after the new migrations failed. The database stays at version 2. Cause: foreign key mismatch - "orders" referencing "users": SQLITE_ERROR`
@@ -190,12 +221,12 @@ Each Durable Object has its own SQLite database. The runner keeps the migration 
 
 When the object starts, the runner does these steps:
 
-1. It makes sure that the list of migrations and the options are correct.
+1. It makes sure that the list of migrations and the options are correct. The version of each migration is the position of its key in the list.
 2. If the table `_migrations` does not exist, it creates this table.
 3. It reads all rows of `_migrations`.
-4. It compares the name of each row with the name of the same version in the list. If a name is different, it throws an error, and no migration runs. A row with a version that is not in the list comes from newer code. The runner does not compare its name.
+4. It compares the name of each row with the name at the same position in the list. For example, it compares the second key with the name of the row that has version 2. If a name is different, it throws an error, and no migration runs. A row with a version that is higher than the number of migrations in the list comes from newer code. The runner does not compare its name.
 5. It finds the database version. This is the highest version in `_migrations`, or 0.
-6. It runs each migration that has a higher version, in order. For each migration, it adds a row to `_migrations`.
+6. It runs each migration that has a higher version, in the order of the keys. For each migration, it adds a row to `_migrations`.
 7. If one or more migrations ran, and a new migration contains `defer_foreign_keys` or `PRAGMA defer_foreign_keys` is ON, it runs `PRAGMA foreign_key_check`. If rows break a foreign key, it throws an error. If not, it sets `PRAGMA defer_foreign_keys = OFF`.
 8. It writes one log line for each migration that ran.
 
@@ -207,7 +238,7 @@ Steps 2 to 7 occur in one transaction, inside `storage.transactionSync()`.
 | The code has new migrations. | The runner runs them and records them. |
 | A new migration fails. | SQLite cancels all new migrations. The database stays at its old version. The runner throws an error, and Cloudflare resets the object. The stub that got the error keeps the error. At the next request, the Worker must get a new stub with `namespace.get(id)`. Then the object starts again, and the runner tries again. This occurs at each request until you deploy a correction. See [When the migrations run](#when-the-migrations-run). |
 | A migration leaves rows that break a foreign key (with `PRAGMA defer_foreign_keys`). | SQLite cancels all new migrations. The database stays at its old version. The runner throws an error that gives the tables. The result is the same as for a failed migration. |
-| A version in `_migrations` has a different name in the list. Example: you renamed or moved a deployed migration. | The runner throws an error before a migration runs. The database does not change. The object does not start until you deploy code with the old name. |
+| A row in `_migrations` has a name that is different from the name at the same position in the list. Example: you renamed or moved a deployed migration, or you added a migration before it. | The runner throws an error before a migration runs. The database does not change. The object does not start until you deploy code with the old name at the old position. |
 | The database version is higher than the last version in the list. This can occur after a rollback of a deployment. | The runner writes a warning to the log. No migration runs, and the object starts. |
 | The list of migrations or the options are not correct. | The runner throws an error before it changes the database. The object does not start. |
 
@@ -263,32 +294,80 @@ Before you deploy, do a test of the migrations. See [Do a test of your migration
 ## Add a migration
 
 1. Open `migrations.js`.
-2. Add a new item at the end of the list.
-3. Set `version` to the last version in the list plus 1.
-4. Set `name` to a short name, for example `create_orders`. After you deploy the migration, do not change this name.
-5. Set `sql` to the SQL of the change. Put a semicolon after each statement. Do not put a comment or an extra semicolon after the last statement.
-6. Do a test of the migration on an object that has the old schema. See [Do a test of your migrations](#do-a-test-of-your-migrations).
-7. If you changed the methods of the object, make sure that the old code can still use them. See [Keep the methods compatible during a deployment](#keep-the-methods-compatible-during-a-deployment).
-8. Deploy the Worker.
+2. Add a new key at the end of the list. The key is the name of the migration.
+3. Use a short name that no other migration has, for example `create_orders`. Do not use a name that contains only digits. After you deploy the migration, do not change this name.
+4. Set the value to the SQL of the change. Put a semicolon after each statement. Do not put a comment or an extra semicolon after the last statement.
+5. Do a test of the migration on an object that has the old schema. See [Do a test of your migrations](#do-a-test-of-your-migrations).
+6. If you changed the methods of the object, make sure that the old code can still use them. See [Keep the methods compatible during a deployment](#keep-the-methods-compatible-during-a-deployment).
+7. Deploy the Worker.
+
+The runner gives the new migration the next version. You do not write the version.
 
 One migration can contain more than one statement. Example:
 
 ```js
-{
-  version: 3,
-  name: "create_orders",
-  sql: `
-    CREATE TABLE orders (
-      id      INTEGER PRIMARY KEY,
-      user_id INTEGER NOT NULL REFERENCES users (id),
-      total   INTEGER NOT NULL
-    );
-    CREATE INDEX orders_user_id ON orders (user_id);
-  `,
-},
+create_orders: `
+  CREATE TABLE orders (
+    id      INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users (id),
+    total   INTEGER NOT NULL
+  );
+  CREATE INDEX orders_user_id ON orders (user_id);
+`,
 ```
 
+CAUTION: Do not give two migrations the same name. JavaScript keeps only the last value, and the runner cannot find this error. See [Names and order](#names-and-order).
+
 Each object runs the new migration at its next start. An object that does not start keeps its old schema. See [When the migrations run](#when-the-migrations-run).
+
+## Names and order
+
+The runner gets the migrations from the keys of the list. The key of a migration is its name. The position of the key is the version of the migration.
+
+The runner reads the keys in the order of `Object.keys()`. For an object literal, this is the order in the file, with one exception. JavaScript moves keys such as `1` and `42` before all other keys, in numeric order.
+
+Use these rules for the names:
+
+- Give each migration a name that no other migration has.
+- Do not use a name that contains only digits, for example `42` or `20240101`. Names such as `001_create_users` and `20240101_create_users` are correct.
+- Do not use the name `__proto__`.
+- Do not use a name that is empty or only white space.
+- If a name is not a JavaScript identifier, put it in quotes, for example `"add-email"`.
+
+Use these rules for the list:
+
+- Keep all migrations in one object literal in one file.
+- Add a new migration only at the end of the list.
+- Do not make the list with spread syntax (`...`), `Object.assign()`, or `Object.fromEntries()`.
+- Do not use `import * as`. Import the list by its name, for example `import { migrations } from "./migrations.js"`.
+- Do not sort the keys. For example, do not use a tool that sorts the keys of objects.
+
+The runner finds these errors before it changes the database. [Errors and warnings](#errors-and-warnings) gives the messages.
+
+- A name that contains only digits. JavaScript moves keys such as `1` and `42`, so the order of the migrations can change.
+- A module namespace object from `import * as`. In Node.js, in workerd, and in the Wrangler bundle, this object sorts its keys. In Vitest, the keys keep the order of the file. Without the check of the runner, your tests can pass, and production can run the migrations in a different order. The runner also finds this error in Vitest.
+- A list with a prototype that is not `Object.prototype`, or with a getter or a setter. Examples are a `Map`, a class instance, and an object without a prototype. In a bundle from Wrangler or Rollup, a module namespace object is an object with getters or an object without a prototype.
+- An array. The copied files used an array. See [Upgrade from the copied files](#upgrade-from-the-copied-files).
+- A name that is empty or only white space.
+- A property with the name `__proto__`, for example from `JSON.parse()`.
+- A value that is not a string, or a value that is empty or only white space.
+
+The runner cannot find these errors:
+
+- Two keys with the same name. JavaScript keeps only the last value, at the position of the first key.
+- The key `__proto__` in an object literal. `__proto__: "..."` makes no property, with or without quotes. The list loses the migration, and no error occurs.
+- A new order on a new object. If you move or sort the keys, the name check finds the change on the objects that ran these migrations. A new object has no history. Thus it runs the migrations in the new order, and no error occurs.
+- A copy of a module namespace object, for example `{ ...namespace }`. The runner accepts the copy, but the copy has sorted keys.
+
+CAUTION: Give each migration a name that no other migration has. If two keys have the same name, JavaScript keeps only the last value. No error occurs. If the new key has the name of a deployed migration, the count of migrations does not change. Objects that ran the deployed migration do not run the new SQL. New objects run the new SQL in place of the old SQL. Thus old and new objects get different schemas.
+
+These tools find two keys with the same name in one object literal:
+
+- `tsc` and your editor, with `// @ts-check` on the first line of `migrations.js`. They show `error TS1117: An object literal cannot have multiple properties with the same name.` See [TypeScript](#typescript).
+- The ESLint rule `no-dupe-keys`. This rule is in `js.configs.recommended`.
+- Wrangler. It shows a warning such as `[WARNING] Duplicate key "add_users_email" in object literal [duplicate-object-key]`. The build and the deployment continue. Thus treat this warning as an error.
+
+These tools do not find the key `__proto__` in an object literal.
 
 ## Do a test of your migrations
 
@@ -316,7 +395,7 @@ it("runs all migrations on a new object", async () => {
   const rows = await runInDurableObject(stub, (instance, state) =>
     state.storage.sql.exec("SELECT version FROM _migrations").toArray(),
   );
-  expect(rows.length).toBe(migrations.length);
+  expect(rows.length).toBe(Object.keys(migrations).length);
 });
 ```
 
@@ -345,7 +424,8 @@ These rules also apply to `fetch()` routes and to the request and response bodie
 ## Rules
 
 - After you deploy a migration, do not change it, move it, or remove it. To correct an error, add a new migration.
-- The runner compares the names in `_migrations` with the names in the list. If you rename or move a deployed migration, the runner throws an error. Then the object does not start until you deploy code with the old name.
+- Add a new migration only at the end of the list. Give it a name that no other migration has. See [Names and order](#names-and-order).
+- The runner compares the names in `_migrations` with the names at the same positions in the list. If you rename or move a deployed migration, or add a migration before it, the runner throws an error. Then the object does not start until you deploy code with the old name at the old position.
 - The runner does not compare the SQL. If you change the SQL of a deployed migration, the runner does not find the change. Objects that ran the old SQL keep the old schema. New objects get the new schema.
 - A migration must contain one or more statements. Do not put a comment or an extra semicolon after the last statement. `sql.exec()` then fails with `SQL code did not contain a statement.` The runner adds this hint to the error: `The SQL must end with a statement. Remove comments and extra semicolons after the last statement.` A migration that has only a comment fails with the same hint. You can put comments before a statement or between statements.
 - Do not use `BEGIN`, `COMMIT`, `ROLLBACK`, or `SAVEPOINT` in a migration. The SQL API of Durable Objects does not accept these statements. The runner controls the transaction.
@@ -439,11 +519,91 @@ The example Durable Object in [`examples/basic`](examples/basic) has this query 
 
 The Wrangler configuration file also has migrations, for example `new_sqlite_classes`. These migrations create or change Durable Object classes. They do not change your tables. For your tables, use `migrations.js` and the runner.
 
+## Upgrade from the copied files
+
+Before version 0.1.0, you copied the files `migrate.js` and `migrations.js` into your project. In these files, the list of migrations is an array. Each item of the array has the properties `version`, `name`, and `sql`. For an array, the runner of the package throws a `TypeError`, and the database does not change. The message of this error refers to this section.
+
+The table `_migrations` did not change. Thus the objects keep their migration history. To change to the package, do these steps:
+
+1. Install the package with `npm install durable-migrations`.
+2. Remove `migrate.js` from your project.
+3. Change the import of the runner to `import { runMigrations } from "durable-migrations";`.
+4. Make sure that the array has the names of the deployed migrations. The item at each position must have the name of the row with that version in `_migrations`. The copied runner did not compare the names. Thus a name in the array can be different from the name in `_migrations`. [See the migration history](#see-the-migration-history) gives a query for these rows.
+
+   If the array has an empty slot, for example `[m1, , m3]`, put the deployed migration back at that position. Get its name from `_migrations`. Get its SQL from your version control.
+
+5. Before you change the array, do a check of its names. Each item must have a name that no other item has. A name must not contain only digits, and it must not be `__proto__`. To find the names that do not pass the check, run this command in the folder of your project:
+
+   ```sh
+   node --input-type=module -e '
+     import { migrations } from "./src/migrations.js";
+     const names = migrations.map((item) => item.name);
+     console.log(names.filter((name, index) =>
+       names.indexOf(name) !== index || /^[0-9]+$/.test(name) || name === "__proto__"));
+   '
+   ```
+
+   If `migrations.js` is not in the folder `src`, change the path in the command. If the command shows `[]`, all names pass the check.
+
+   CAUTION: If the command shows a name, do not change the array to an object. An object literal cannot hold this migration history. For a name with only digits, the runner throws an error, and the objects do not start. For two items with the same name, or for `__proto__`, the list loses a migration. If the lost migration is not at the end of the array, the name check throws an error. Then the deployed objects do not start. If the lost migration is at the end of the array, the deployed objects start with only a warning. New objects then get a schema that is different from the schema of the deployed objects.
+
+6. Change the array to an object. For each item, in the same order, write a property. The key is the old `name`, and the value is the old `sql`. Remove `version`. If the file has the rule "Give it the next version number" in a comment, remove this rule. Also add the lines `// @ts-check` and `/** @type {Record<string, string>} */`, as in this example. Then your editor shows an error for two keys with the same name while you change the list.
+
+   Before:
+
+   ```js
+   export const migrations = [
+     {
+       version: 1,
+       name: "create_users",
+       sql: `
+         CREATE TABLE users (
+           id   INTEGER PRIMARY KEY,
+           name TEXT NOT NULL
+         );
+       `,
+     },
+     {
+       version: 2,
+       name: "add_users_email",
+       sql: `
+         ALTER TABLE users ADD COLUMN email TEXT;
+         CREATE UNIQUE INDEX users_email ON users (email);
+       `,
+     },
+   ];
+   ```
+
+   After:
+
+   ```js
+   // @ts-check
+
+   /** @type {Record<string, string>} */
+   export const migrations = {
+     create_users: `
+       CREATE TABLE users (
+         id   INTEGER PRIMARY KEY,
+         name TEXT NOT NULL
+       );
+     `,
+     add_users_email: `
+       ALTER TABLE users ADD COLUMN email TEXT;
+       CREATE UNIQUE INDEX users_email ON users (email);
+     `,
+   };
+   ```
+
+   If a name is not a JavaScript identifier, put it in quotes, for example `"add-email"`. Do not change the array to an object at run time, for example with `Object.fromEntries()`. Such code hides two items with the same name.
+
+7. Make sure that the keys have the same names in the same order as the rows in `_migrations`. The key at each position must have the name of the row with that version. If a name is different, the runner throws an error, and the deployed objects do not start.
+8. Do a test with `wrangler dev` on an object that has the old data. See [Do a test of your migrations](#do-a-test-of-your-migrations).
+
 ## Versions
 
 This package uses [semantic versioning](https://semver.org/). Before version 1.0.0, a minor version can change the API. [CHANGELOG.md](CHANGELOG.md) gives the changes in each version.
 
-The table `_migrations` and its columns `version`, `name`, and `applied_at` are part of the API. A change to them is a breaking change.
+The table `_migrations` and its columns `version`, `name`, and `applied_at` are part of the API. A change to them is a breaking change. The column `version` contains the position of the migration in the list.
 
 ## License
 
