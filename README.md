@@ -9,7 +9,12 @@ Schema migrations for SQLite-backed Cloudflare Durable Objects. Raw SQL. One fun
 ```js
 // migrations.js: each key is the name of a migration, and each value is its SQL.
 export const migrations = {
-  create_users: "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL);",
+  create_users: `
+    CREATE TABLE users (
+      id   INTEGER PRIMARY KEY,
+      name TEXT NOT NULL
+    );
+  `,
   add_users_email: "ALTER TABLE users ADD COLUMN email TEXT;",
 };
 
