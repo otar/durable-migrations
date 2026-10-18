@@ -4,11 +4,11 @@ import {
   migrate,
   migrateError,
   migrations,
-  take,
   newObject,
   query,
   recordingLogger,
   tableNames,
+  take,
 } from "./helpers.js";
 
 // Migration 4 refers to a table that does not exist, so it fails.

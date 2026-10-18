@@ -10,7 +10,6 @@ import {
   history,
   migrate,
   migrateError,
-  take,
   newObject,
   query,
   recordingLogger,

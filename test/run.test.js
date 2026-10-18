@@ -5,11 +5,11 @@ import {
   history,
   migrate,
   migrations,
-  take,
   newObject,
   query,
   recordingLogger,
   tableNames,
+  take,
 } from "./helpers.js";
 
 describe("a new database", () => {

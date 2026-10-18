@@ -71,7 +71,7 @@ export const migrations = {
   create_products: "CREATE TABLE products (id INTEGER PRIMARY KEY, title TEXT NOT NULL);",
 };
 
-// Returns the first migrations of a list as a new object.
-export function take(count, list = migrations) {
-  return Object.fromEntries(Object.entries(list).slice(0, count));
+// Returns the first migrations of the test list as a new object.
+export function take(count) {
+  return Object.fromEntries(Object.entries(migrations).slice(0, count));
 }
