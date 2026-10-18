@@ -126,7 +126,7 @@ If a migration fails, SQLite cancels all new migrations, and the start of the ob
 runMigrations(storage, migrations, options?)
 ```
 
-- `storage`: the `ctx.storage` of the Durable Object.
+- `storage`: the `ctx.storage` of the Durable Object. If you give `ctx` or `ctx.storage.sql`, the runner throws a `TypeError`.
 - `migrations`: an object literal with all migrations, in order. Each key is the name of a migration, and each value is its SQL.
 - `options.logger` (optional): an object with the functions `log(message)` and `warn(message)`. The default is `console`.
 

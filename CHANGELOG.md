@@ -9,6 +9,9 @@ This is the first version as an npm package. Before this version, you copied the
 ### Added
 
 - The npm package `durable-migrations`. It has one ESM export, `runMigrations()`. The package has no dependencies.
+- A storage check. If `storage` is not an object, the runner throws a `TypeError`. If `storage` does not have the function `transactionSync()`, or if it does not have the property `sql`, the runner also throws a `TypeError`. Examples are `ctx` and `ctx.storage.sql`. The runner does this check first, before it changes the database. The message is: `[migrations] The storage must be ctx.storage, the storage of the Durable Object. Do not give ctx or ctx.storage.sql.`
+  - The storage of a class without SQLite passes this check. For this storage, the error from Cloudflare starts with `SQL is not enabled for this Durable Object class.`
+  - Before, the runner threw a `TypeError` without `[migrations]`, for example `storage.transactionSync is not a function`.
 - A name check of the migrations that ran. At each start, the runner compares the names in `_migrations` with the names at the same positions in the list. If a name is different, the runner throws an error, and no migration runs. The error gives the position, the name in `_migrations`, and the name in the list.
 - A hint for comments or extra semicolons after the last statement. If `sql.exec()` fails with `SQL code did not contain a statement.`, the runner adds this hint to the error: `The SQL must end with a statement. Remove comments and extra semicolons after the last statement.` A migration that has only a comment gets the same hint.
 - A foreign key check after the new migrations. If a new migration contains `defer_foreign_keys`, or if `PRAGMA defer_foreign_keys` is ON after the new migrations, the runner runs `PRAGMA foreign_key_check` before the transaction ends. If no migration runs, the runner does not do this check.

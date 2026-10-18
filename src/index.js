@@ -52,6 +52,7 @@ const NOT_AN_OBJECT_LITERAL =
  * @returns {number} The database version after the call.
  */
 export function runMigrations(storage, migrations, options = {}) {
+  checkStorage(storage);
   const list = readList(migrations);
   const logger = getLogger(options);
 
@@ -285,6 +286,29 @@ function checkDeferredForeignKeys(sql, applied, current) {
   // rows no longer have, for example after a table rename. Setting the
   // pragma to OFF clears this count, so that the commit does not fail.
   sql.exec("PRAGMA defer_foreign_keys = OFF");
+}
+
+// Makes sure that the storage is ctx.storage, not ctx or ctx.storage.sql.
+// A function with transactionSync() and sql also passes. In a unit test, a
+// deep mock of ctx makes ctx.storage a Proxy around a function.
+//
+// The storage of a class without SQLite also has transactionSync() and sql.
+// Thus it passes this check, and the first sql.exec() throws the error from
+// Cloudflare. That error tells the caller that the class has no SQLite.
+// The "in" operator calls no getter, and runMigrations() reads storage.sql
+// only after all checks.
+function checkStorage(storage) {
+  if (
+    storage === null ||
+    (typeof storage !== "object" && typeof storage !== "function") ||
+    typeof storage.transactionSync !== "function" ||
+    !("sql" in storage)
+  ) {
+    throw new TypeError(
+      "[migrations] The storage must be ctx.storage, the storage of the Durable Object. " +
+        "Do not give ctx or ctx.storage.sql.",
+    );
+  }
 }
 
 // Gets the logger from the options and makes sure that it can write.
