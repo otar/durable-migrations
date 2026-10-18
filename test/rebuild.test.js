@@ -47,7 +47,7 @@ const FOREIGN_KEY_ERROR =
   "[migrations] The new migrations left rows that break a foreign key in these tables: orders. " +
   "The database stays at version 2.";
 
-// The rebuild order of the README. It copies "users" to "users_old" first.
+// The rebuild order of docs/rebuild-a-table.md. It copies "users" to "users_old" first.
 // The rebuild makes "name" NOT NULL with a CHECK, and makes "email" unique.
 const COPY_USERS = {
   rebuild_users: `
