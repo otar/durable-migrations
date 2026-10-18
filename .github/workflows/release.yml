@@ -1,0 +1,126 @@
+name: Release
+
+# This workflow publishes the package to npm when you push a tag "v*".
+# See RELEASING.md.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # The step "Make sure that the tag is on main" needs the history of all branches.
+      - name: Get the source code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Make sure that the tag is the version in package.json
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="$(node -p 'require("./package.json").version')"
+          if [ "$TAG" != "v$VERSION" ]; then
+            echo "::error::The tag is $TAG, but the version in package.json is $VERSION. The tag must be v$VERSION."
+            exit 1
+          fi
+
+      # The workflow publishes only a commit that is on main.
+      - name: Make sure that the tag is on main
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::The tag $TAG is not on main. Remove the tag. Then tag a commit on main."
+            exit 1
+          fi
+
+      - name: Install the dependencies
+        run: npm ci
+
+      - name: Run the tests
+        run: npm test
+
+      # These steps do the same check as the job "Build the example" in ci.yml.
+      # They install Wrangler. Thus they are in this job, not in the job "Publish".
+      # With --install-links, npm packs the package and installs it as from the registry.
+      # Thus the build fails if a necessary file is not in the package.
+      - name: Install the dependencies of the example
+        working-directory: examples/basic
+        run: npm install --install-links
+
+      - name: Bundle the example with Wrangler
+        working-directory: examples/basic
+        run: npx wrangler deploy --dry-run --outdir dist
+
+  # The package has no runtime dependencies and no build step. Thus this job does not run npm ci.
+  # As a result, no code from a dev dependency runs while the job can get an OIDC token.
+  publish:
+    name: Publish
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # npm trusted publishing uses the OIDC token of the workflow. No npm token is necessary.
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Get the source code
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      # Trusted publishing needs npm 11.5.1 or later. Node.js 24 includes it.
+      # This step downloads nothing. If npm is older, the step fails.
+      - name: Make sure that npm is 11.5.1 or later
+        run: |
+          NPM_VERSION="$(npm --version)"
+          node -e '
+            const version = process.argv[1];
+            const [major, minor, patch] = version.split(".").map((part) => parseInt(part, 10));
+            const correct = major > 11 || (major === 11 && (minor > 5 || (minor === 5 && patch >= 1)));
+            if (!correct) {
+              console.log("::error::npm is " + version + ". Trusted publishing needs npm 11.5.1 or later.");
+              process.exit(1);
+            }
+            console.log("npm is " + version + ".");
+          ' "$NPM_VERSION"
+
+      # If npm has this version, the workflow does not publish it again.
+      # For example, the maintainer publishes the first version from a computer. See RELEASING.md.
+      - name: Find this version on npm
+        id: registry
+        run: |
+          NAME="$(node -p 'require("./package.json").name')"
+          VERSION="$(node -p 'require("./package.json").version')"
+          if [ "$(npm view "$NAME@$VERSION" version 2> /dev/null)" = "$VERSION" ]; then
+            echo "::notice::npm has $NAME@$VERSION. The workflow does not publish it again."
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish to npm
+        if: steps.registry.outputs.published == 'false'
+        run: npm publish --provenance --access public

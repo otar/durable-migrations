@@ -1,0 +1,40 @@
+{
+  "name": "durable-migrations",
+  "version": "0.1.0",
+  "description": "Schema migrations for SQLite-backed Cloudflare Durable Objects. Raw SQL. No dependencies.",
+  "keywords": [
+    "cloudflare",
+    "cloudflare-workers",
+    "durable-objects",
+    "sqlite",
+    "migrations",
+    "schema"
+  ],
+  "homepage": "https://github.com/otar/durable-migrations#readme",
+  "bugs": {
+    "url": "https://github.com/otar/durable-migrations/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/otar/durable-migrations.git"
+  },
+  "license": "MIT",
+  "author": "Otar Chekurishvili",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js",
+    "./package.json": "./package.json"
+  },
+  "main": "./src/index.js",
+  "files": [
+    "src"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.4.4",
+    "vitest": "^5.0.5"
+  }
+}

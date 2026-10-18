@@ -1,14 +1,17 @@
-// migrations.js
+// src/migrations.js
 //
 // The schema migrations of the Durable Object, in order.
 //
 // Rules:
 // - Add a new migration only at the end of the list.
 // - Give it the next version number: 1, 2, 3, and more.
-// - After you deploy a migration, do not change it or remove it.
-//   To correct an error, add a new migration.
+// - After you deploy a migration, do not change it, move it, or remove it.
+//   If you rename or move it, the runner throws an error, and the object
+//   does not start. To correct an error, add a new migration.
 // - One migration can contain more than one SQL statement.
 //   Put a semicolon after each statement.
+// - The SQL must end with a statement. Do not put a comment or an extra
+//   semicolon after the last statement. If you do, the migration fails.
 // - Do not use BEGIN, COMMIT, ROLLBACK, or SAVEPOINT.
 //   The runner controls the transaction.
 

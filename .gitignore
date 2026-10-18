@@ -1,0 +1,9 @@
+node_modules/
+.wrangler/
+coverage/
+*.tgz
+
+# npm install and wrangler deploy --dry-run make these files in an example.
+# The examples do not keep a package-lock.json.
+examples/*/package-lock.json
+examples/*/dist/

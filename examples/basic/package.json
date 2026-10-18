@@ -1,0 +1,15 @@
+{
+  "name": "durable-migrations-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "durable-migrations": "file:../.."
+  },
+  "devDependencies": {
+    "wrangler": "^4.151.1"
+  }
+}

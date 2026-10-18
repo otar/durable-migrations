@@ -1,0 +1,27 @@
+// The Worker that the tests run in. It is not part of the package.
+{
+  "name": "durable-migrations-test",
+  "main": "./worker.js",
+  "compatibility_date": "2026-10-01",
+  "durable_objects": {
+    "bindings": [
+      { "name": "SQLITE_OBJECT", "class_name": "SqliteObject" },
+      { "name": "KV_OBJECT", "class_name": "KvObject" },
+      { "name": "MIGRATING_OBJECT", "class_name": "MigratingObject" },
+      { "name": "FAILING_OBJECT", "class_name": "FailingObject" },
+      { "name": "LOG_ERROR_OBJECT", "class_name": "LogErrorObject" },
+      { "name": "WARN_ERROR_OBJECT", "class_name": "WarnErrorObject" }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["SqliteObject", "MigratingObject", "FailingObject"],
+      "new_classes": ["KvObject"]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["LogErrorObject", "WarnErrorObject"]
+    }
+  ]
+}

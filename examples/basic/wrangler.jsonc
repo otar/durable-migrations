@@ -1,0 +1,14 @@
+// The Wrangler configuration of the example Worker.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "durable-migrations-example",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-01",
+  "observability": { "enabled": true },
+  "durable_objects": {
+    "bindings": [{ "name": "MY_DURABLE_OBJECT", "class_name": "MyDurableObject" }]
+  },
+  // These Wrangler migrations create the Durable Object class.
+  // They do not change your tables. The runner changes the tables with src/migrations.js.
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["MyDurableObject"] }]
+}
