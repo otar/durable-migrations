@@ -3,8 +3,8 @@ import {
   history,
   migrate,
   migrateError,
-  migration,
   migrations,
+  take,
   newObject,
   query,
   recordingLogger,
@@ -12,15 +12,15 @@ import {
 } from "./helpers.js";
 
 // Migration 4 refers to a table that does not exist, so it fails.
-const failing = migration(4, "INSERT INTO missing_table (id) VALUES (1);", "fill_missing_table");
+const failing = { fill_missing_table: "INSERT INTO missing_table (id) VALUES (1);" };
 
 describe("a migration that fails", () => {
   it("cancels all new migrations and keeps the old version", async () => {
     const object = newObject();
-    await migrate(object, migrations.slice(0, 2));
+    await migrate(object, take(2));
     const logger = recordingLogger();
 
-    const error = await migrateError(object, [...migrations, failing], { logger });
+    const error = await migrateError(object, { ...migrations, ...failing }, { logger });
 
     expect(error.message).toMatch(
       /^\[migrations\] Migration 4 \(fill_missing_table\) failed\. The database stays at version 2\. Cause: /,
@@ -36,9 +36,9 @@ describe("a migration that fails", () => {
 
   it("keeps the error of SQLite as the cause", async () => {
     const object = newObject();
-    await migrate(object, migrations.slice(0, 2));
+    await migrate(object, take(2));
 
-    const error = await migrateError(object, [...migrations, failing]);
+    const error = await migrateError(object, { ...migrations, ...failing });
 
     expect(error.constructor).toBe(Error);
     expect(error.cause).toBeInstanceOf(Error);
@@ -52,10 +52,10 @@ describe("a migration that fails", () => {
   it("removes the table _migrations on a new database", async () => {
     const object = newObject();
 
-    const error = await migrateError(object, [
-      migrations[0],
-      migration(2, "INSERT INTO missing_table (id) VALUES (1);"),
-    ]);
+    const error = await migrateError(object, {
+      ...take(1),
+      migration_2: "INSERT INTO missing_table (id) VALUES (1);",
+    });
 
     expect(error.message).toMatch(
       /^\[migrations\] Migration 2 \(migration_2\) failed\. The database stays at version 0\. /,
@@ -65,19 +65,16 @@ describe("a migration that fails", () => {
 
   it("cancels the statements before the failed statement in the same migration", async () => {
     const object = newObject();
-    await migrate(object, migrations.slice(0, 1));
+    await migrate(object, take(1));
 
-    const error = await migrateError(object, [
-      migrations[0],
-      migration(
-        2,
-        `
-          CREATE TABLE notes (id INTEGER PRIMARY KEY);
-          INSERT INTO users (id, name) VALUES (1, 'Ana');
-          INSERT INTO missing_table (id) VALUES (1);
-        `,
-      ),
-    ]);
+    const error = await migrateError(object, {
+      ...take(1),
+      migration_2: `
+        CREATE TABLE notes (id INTEGER PRIMARY KEY);
+        INSERT INTO users (id, name) VALUES (1, 'Ana');
+        INSERT INTO missing_table (id) VALUES (1);
+      `,
+    });
 
     expect(error.message).toContain("The database stays at version 1.");
     expect(await tableNames(object)).toEqual(["_migrations", "users"]);
@@ -87,13 +84,13 @@ describe("a migration that fails", () => {
 
   it("runs the migrations again after the list is correct", async () => {
     const object = newObject();
-    await migrate(object, migrations.slice(0, 2));
-    await migrateError(object, [...migrations, failing]);
+    await migrate(object, take(2));
+    await migrateError(object, { ...migrations, ...failing });
     const logger = recordingLogger();
 
     const version = await migrate(
       object,
-      [...migrations, migration(4, "CREATE TABLE notes (id INTEGER PRIMARY KEY);", "create_notes")],
+      { ...migrations, create_notes: "CREATE TABLE notes (id INTEGER PRIMARY KEY);" },
       { logger },
     );
 

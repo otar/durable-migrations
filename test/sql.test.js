@@ -3,8 +3,8 @@ import {
   history,
   migrate,
   migrateError,
-  migration,
   migrations,
+  take,
   newObject,
   query,
   tableNames,
@@ -17,17 +17,14 @@ describe("the SQL of a migration", () => {
   it("can contain more than one statement", async () => {
     const object = newObject();
 
-    const version = await migrate(object, [
-      migration(
-        1,
-        `
-          CREATE TABLE notes (id INTEGER PRIMARY KEY, text TEXT NOT NULL);
-          CREATE INDEX notes_text ON notes (text);
-          INSERT INTO notes (id, text) VALUES (1, 'first');
-          INSERT INTO notes (id, text) VALUES (2, 'second');
-        `,
-      ),
-    ]);
+    const version = await migrate(object, {
+      create_notes: `
+        CREATE TABLE notes (id INTEGER PRIMARY KEY, text TEXT NOT NULL);
+        CREATE INDEX notes_text ON notes (text);
+        INSERT INTO notes (id, text) VALUES (1, 'first');
+        INSERT INTO notes (id, text) VALUES (2, 'second');
+      `,
+    });
 
     expect(version).toBe(1);
     expect(await query(object, "SELECT id, text FROM notes ORDER BY id")).toEqual([
@@ -59,7 +56,7 @@ describe("the SQL of a migration", () => {
   ])("can have %s", async (_, sql) => {
     const object = newObject();
 
-    const version = await migrate(object, [migration(1, sql, "create_notes")]);
+    const version = await migrate(object, { create_notes: sql });
 
     expect(version).toBe(1);
     expect(await tableNames(object)).toEqual(["_migrations", "notes"]);
@@ -75,7 +72,7 @@ describe("the SQL of a migration", () => {
   ])("fails with a hint when it has %s", async (_, sql) => {
     const object = newObject();
 
-    const error = await migrateError(object, [migration(1, sql, "create_notes")]);
+    const error = await migrateError(object, { create_notes: sql });
 
     expect(error.cause.message).toContain("SQL code did not contain a statement");
     expect(error.message).toBe(
@@ -88,9 +85,9 @@ describe("the SQL of a migration", () => {
   it("fails without the hint for a different SQL error", async () => {
     const object = newObject();
 
-    const error = await migrateError(object, [
-      migration(1, "CREATE INDEX orders_user_id ON orders (user_id);", "index_orders"),
-    ]);
+    const error = await migrateError(object, {
+      index_orders: "CREATE INDEX orders_user_id ON orders (user_id);",
+    });
 
     expect(error.cause.message).toMatch(/no such table/);
     expect(error.message).toBe(
@@ -105,13 +102,11 @@ describe("the SQL of a migration", () => {
     const object = newObject();
 
     // The first row is correct. The second row has JSON that is not correct.
-    const error = await migrateError(object, [
-      migration(
-        1,
+    const error = await migrateError(object, {
+      create_notes:
         "CREATE TABLE notes (id INTEGER);\n" +
-          "SELECT CASE WHEN value = 2 THEN json('not json') ELSE value END FROM json_each('[1,2]');",
-      ),
-    ]);
+        "SELECT CASE WHEN value = 2 THEN json('not json') ELSE value END FROM json_each('[1,2]');",
+    });
 
     expect(error.message).toMatch(
       /^\[migrations\] Migration 1 \(.*\) failed\. The database stays at version 0\. Cause: malformed JSON/,
@@ -123,17 +118,13 @@ describe("the SQL of a migration", () => {
   it("can end with a statement that returns many rows", async () => {
     const object = newObject();
 
-    const version = await migrate(object, [
-      migration(
-        1,
-        `
-          CREATE TABLE notes (id INTEGER);
-          WITH RECURSIVE numbers (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM numbers WHERE n < 200000)
-          SELECT n, 'row' AS payload FROM numbers;
-        `,
-        "create_notes",
-      ),
-    ]);
+    const version = await migrate(object, {
+      create_notes: `
+        CREATE TABLE notes (id INTEGER);
+        WITH RECURSIVE numbers (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM numbers WHERE n < 200000)
+        SELECT n, 'row' AS payload FROM numbers;
+      `,
+    });
 
     expect(version).toBe(1);
     expect(await tableNames(object)).toEqual(["_migrations", "notes"]);
@@ -147,9 +138,9 @@ describe("the SQL of a migration", () => {
     ["SAVEPOINT", "SAVEPOINT before_notes;\nCREATE TABLE notes (id INTEGER);\nRELEASE before_notes;"],
   ])("fails and changes nothing when it contains %s", async (_, sql) => {
     const object = newObject();
-    await migrate(object, migrations.slice(0, 1));
+    await migrate(object, take(1));
 
-    const error = await migrateError(object, [migrations[0], migration(2, sql)]);
+    const error = await migrateError(object, { ...take(1), migration_2: sql });
 
     expect(error.message).toMatch(
       /^\[migrations\] Migration 2 \(migration_2\) failed\. The database stays at version 1\. Cause: To execute a transaction, please use the state\.storage\.transaction\(\) or state\.storage\.transactionSync\(\) APIs/,
@@ -165,9 +156,9 @@ describe("a migration that changes the table _migrations", () => {
     ["renames", "ALTER TABLE _migrations RENAME TO old_migrations;"],
   ])("fails and changes nothing when it %s the table", async (_, sql) => {
     const object = newObject();
-    await migrate(object, migrations.slice(0, 1));
+    await migrate(object, take(1));
 
-    const error = await migrateError(object, [migrations[0], migration(2, sql, "change_history")]);
+    const error = await migrateError(object, { ...take(1), change_history: sql });
 
     expect(error.message).toMatch(
       /^\[migrations\] Migration 2 \(change_history\) failed\. The database stays at version 1\. Cause: no such table: _migrations/,
@@ -180,14 +171,11 @@ describe("a migration that changes the table _migrations", () => {
   it("fails and changes nothing when it adds its own row", async () => {
     const object = newObject();
 
-    const error = await migrateError(object, [
-      migration(
-        1,
+    const error = await migrateError(object, {
+      create_notes:
         "CREATE TABLE notes (id INTEGER);\n" +
-          "INSERT INTO _migrations (version, name) VALUES (1, 'create_notes');",
-        "create_notes",
-      ),
-    ]);
+        "INSERT INTO _migrations (version, name) VALUES (1, 'create_notes');",
+    });
 
     expect(error.message).toMatch(
       /^\[migrations\] Migration 1 \(create_notes\) failed\. The database stays at version 0\. Cause: UNIQUE constraint failed/,

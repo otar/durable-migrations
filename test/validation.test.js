@@ -1,153 +1,126 @@
 import { env } from "cloudflare:workers";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import * as namespace from "./fixtures/namespace.js";
 import {
   history,
   migrate,
   migrateError,
-  migration,
   migrations,
   newObject,
+  query,
+  recordingLogger,
   tableNames,
+  take,
 } from "./helpers.js";
 
 const SQL = "CREATE TABLE notes (id INTEGER);";
 
-// JSON.stringify() throws an error for this object.
-const circular = {};
-circular.self = circular;
+const AN_ARRAY =
+  "[migrations] The list of migrations must be an object, not an array. " +
+  "Write each migration as a property, in the same order. " +
+  "The key is the name of the migration, and the value is its SQL. Remove the versions. " +
+  'See "Upgrade from the copied files" in the README.';
 
-describe("an incorrect list of migrations", () => {
+const NOT_AN_OBJECT_LITERAL =
+  "[migrations] The list of migrations must be an object literal. " +
+  'Do not use a module namespace object ("import * as"), a Map, a class instance, ' +
+  "an object without a prototype, or getters. A module namespace object sorts its keys. " +
+  'Import the list by its name, for example import { migrations } from "./migrations.js".';
+
+function notAnObject(type) {
+  return (
+    "[migrations] The list of migrations must be an object. " +
+    `Each key is the name of a migration, and each value is its SQL. It is ${type}.`
+  );
+}
+
+function onlyDigits(name) {
+  return (
+    `[migrations] The name "${name}" contains only digits. ` +
+    'JavaScript moves keys such as "1" and "42" before all other keys of an object, ' +
+    "so the order of the migrations can change. " +
+    `Add a letter to the name, for example "m${name}".`
+  );
+}
+
+function noSql(version, name) {
+  return (
+    `[migrations] Migration ${version} (${name}) must have SQL. ` +
+    "The value must be a string that is not empty and not only white space."
+  );
+}
+
+// The objects that bundlers make for "import * as" from fixtures/namespace.js.
+// Rollup makes a frozen object without a prototype. esbuild (Wrangler) and
+// Rolldown make an object with a getter for each export, in sorted order.
+const rollupNamespace = Object.freeze({
+  __proto__: null,
+  add_users_email: namespace.add_users_email,
+  create_users: namespace.create_users,
+});
+const esbuildNamespace = {};
+for (const name of ["add_users_email", "create_users"]) {
+  Object.defineProperty(esbuildNamespace, name, { get: () => namespace[name], enumerable: true });
+}
+
+class MigrationList {
+  constructor() {
+    this.create_notes = SQL;
+  }
+}
+
+function withGetter(get) {
+  const list = { create_notes: SQL };
+  Object.defineProperty(list, "add_index", { get, enumerable: true });
+  return list;
+}
+
+describe("a list that is not correct", () => {
   it.each([
-    ["undefined", undefined],
-    ["null", null],
-    ["an object", { 0: migration(1, SQL), length: 1 }],
-    ["a string", "migrations"],
-  ])("%s causes a TypeError before the database changes", async (_, list) => {
+    ["undefined", undefined, notAnObject("undefined")],
+    ["null", null, notAnObject("null")],
+    ["a string", "migrations", notAnObject("a string")],
+    ["a function", () => ({ create_notes: SQL }), notAnObject("a function")],
+    ["an array in the old format", [{ version: 1, name: "create_notes", sql: SQL }], AN_ARRAY],
+    ["an empty array", [], AN_ARRAY],
+    ["a module namespace object", namespace, NOT_AN_OBJECT_LITERAL],
+    ["the object that Rollup makes for import * as", rollupNamespace, NOT_AN_OBJECT_LITERAL],
+    ["the object that esbuild makes for import * as", esbuildNamespace, NOT_AN_OBJECT_LITERAL],
+    ["an object without a prototype", { __proto__: null, create_notes: SQL }, NOT_AN_OBJECT_LITERAL],
+    ["a Map", new Map([["create_notes", SQL]]), NOT_AN_OBJECT_LITERAL],
+    ["a class instance", new MigrationList(), NOT_AN_OBJECT_LITERAL],
+    ["a getter", withGetter(() => SQL), NOT_AN_OBJECT_LITERAL],
+  ])("%s causes a TypeError before the database changes", async (_, list, message) => {
     const object = newObject();
 
     const error = await migrateError(object, list);
 
     expect(error).toBeInstanceOf(TypeError);
-    expect(error.message).toBe("[migrations] The list of migrations must be an array.");
+    expect(error.message).toBe(message);
     expect(await tableNames(object)).toEqual([]);
   });
 
   it.each([
+    ["a name with only digits", { create_notes: SQL, 42: "SELECT 1;" }, onlyDigits("42")],
+    ["a name with leading zeros", { create_notes: SQL, "007": SQL }, onlyDigits("007")],
+    ["an empty name", { create_notes: SQL, "": SQL }, "[migrations] Migration 2 must have a name."],
+    ["a name with only whitespace", { " \t\n": SQL }, "[migrations] Migration 1 must have a name."],
     [
-      "a null item",
-      [null],
-      "[migrations] Item 1 of the list must have version 1. It has version undefined.",
+      "the name __proto__",
+      JSON.parse('{"create_notes": "SELECT 1;", "__proto__": "SELECT 1;"}'),
+      '[migrations] Do not use the name "__proto__". ' +
+        "In an object literal, JavaScript makes no property for this key, and the migration is lost.",
     ],
-    [
-      "an item without a version",
-      [{ name: "create_notes", sql: SQL }],
-      "[migrations] Item 1 of the list must have version 1. It has version undefined.",
-    ],
-    [
-      "a list with an empty slot",
-      Object.assign([], { 0: migration(1, SQL), 2: migration(3, "SELECT 1;") }),
-      "[migrations] Item 2 of the list must have version 2. It has version undefined.",
-    ],
-    [
-      "a version that starts at 0",
-      [migration(0, SQL)],
-      "[migrations] Item 1 of the list must have version 1. It has version 0.",
-    ],
-    [
-      "a gap in the versions",
-      [migration(1, SQL), migration(3, "SELECT 1;")],
-      "[migrations] Item 2 of the list must have version 2. It has version 3.",
-    ],
-    [
-      "a duplicate version",
-      [migration(1, SQL), migration(1, "SELECT 1;")],
-      "[migrations] Item 2 of the list must have version 2. It has version 1.",
-    ],
-    [
-      "versions in the wrong order",
-      [migration(2, SQL), migration(1, "SELECT 1;")],
-      "[migrations] Item 1 of the list must have version 1. It has version 2.",
-    ],
-    [
-      "a version that is a string",
-      [{ version: "1", name: "create_notes", sql: SQL }],
-      '[migrations] Item 1 of the list must have version 1. It has version "1".',
-    ],
-    [
-      "a version that is a BigInt",
-      [{ version: 1n, name: "create_notes", sql: SQL }],
-      "[migrations] Item 1 of the list must have version 1. It has version 1n.",
-    ],
-    [
-      "a version that is NaN",
-      [{ version: Number.NaN, name: "create_notes", sql: SQL }],
-      "[migrations] Item 1 of the list must have version 1. It has version NaN.",
-    ],
-    [
-      "a version that is Infinity",
-      [{ version: Number.POSITIVE_INFINITY, name: "create_notes", sql: SQL }],
-      "[migrations] Item 1 of the list must have version 1. It has version Infinity.",
-    ],
-    [
-      "a version that is an object with a circular reference",
-      [{ version: circular, name: "create_notes", sql: SQL }],
-      "[migrations] Item 1 of the list must have version 1. It has version an object.",
-    ],
-    [
-      "a version that is an array",
-      [{ version: [1], name: "create_notes", sql: SQL }],
-      "[migrations] Item 1 of the list must have version 1. It has version an object.",
-    ],
-    [
-      "a version that is a function",
-      [{ version: () => 1, name: "create_notes", sql: SQL }],
-      "[migrations] Item 1 of the list must have version 1. It has version a function.",
-    ],
-    [
-      "an item without a name",
-      [{ version: 1, sql: SQL }],
-      "[migrations] Migration 1 must have a name.",
-    ],
-    [
-      "an empty name",
-      [{ version: 1, name: "", sql: SQL }],
-      "[migrations] Migration 1 must have a name.",
-    ],
-    [
-      "a name with only whitespace",
-      [{ version: 1, name: " \t\n", sql: SQL }],
-      "[migrations] Migration 1 must have a name.",
-    ],
-    [
-      "a name that is not a string",
-      [{ version: 1, name: 1, sql: SQL }],
-      "[migrations] Migration 1 must have a name.",
-    ],
-    [
-      "an item without SQL",
-      [{ version: 1, name: "create_notes" }],
-      "[migrations] Migration 1 must have SQL.",
-    ],
-    [
-      "empty SQL",
-      [{ version: 1, name: "create_notes", sql: "" }],
-      "[migrations] Migration 1 must have SQL.",
-    ],
-    [
-      "SQL with only whitespace",
-      [{ version: 1, name: "create_notes", sql: " \t\n" }],
-      "[migrations] Migration 1 must have SQL.",
-    ],
-    [
-      "SQL that is not a string",
-      [{ version: 1, name: "create_notes", sql: ["CREATE TABLE notes (id INTEGER);"] }],
-      "[migrations] Migration 1 must have SQL.",
-    ],
-    [
-      "an incorrect item after correct items",
-      [migration(1, SQL), migration(2, "SELECT 1;"), { version: 3, name: "empty", sql: "" }],
-      "[migrations] Migration 3 must have SQL.",
-    ],
+    ...[
+      ["undefined", undefined],
+      ["empty", ""],
+      ["only whitespace", " \t\n"],
+      ["a number", 1],
+      ["an array", [SQL]],
+      ["an object with sql", { sql: SQL }],
+      ["a function", () => SQL],
+    ].map(([type, value]) => [`SQL that is ${type}`, { create_notes: SQL, add_index: value }, noSql(2, "add_index")]),
+    ["an incorrect value after correct values", { a: SQL, b: "SELECT 1;", empty: "" }, noSql(3, "empty")],
   ])("%s causes an error before the database changes", async (_, list, message) => {
     const object = newObject();
 
@@ -158,17 +131,70 @@ describe("an incorrect list of migrations", () => {
     expect(await tableNames(object)).toEqual([]);
   });
 
+  it("does not call a getter", async () => {
+    const get = vi.fn(() => SQL);
+
+    await migrateError(newObject(), withGetter(get));
+
+    expect(get).not.toHaveBeenCalled();
+  });
+
   it("causes an error before a database with migrations changes", async () => {
     const object = newObject();
-    await migrate(object, migrations.slice(0, 1));
+    await migrate(object, take(1));
 
-    const error = await migrateError(object, [migrations[0], migrations[2]]);
+    const error = await migrateError(object, { ...migrations, 4: "SELECT 1;" });
 
-    expect(error.message).toBe(
-      "[migrations] Item 2 of the list must have version 2. It has version 3.",
-    );
+    expect(error.message).toBe(onlyDigits("4"));
     expect(await tableNames(object)).toEqual(["_migrations", "users"]);
     expect(await history(object)).toEqual([[1, "create_users"]]);
+  });
+});
+
+describe("a correct list", () => {
+  it.each([
+    ["a frozen object", Object.freeze({ create_notes: SQL })],
+    ["names that start with digits", { "001_create_notes": SQL, "-1": "SELECT 1;", "1.5": "SELECT 1;" }],
+  ])("can be %s", async (_, list) => {
+    const object = newObject();
+
+    const version = await migrate(object, list);
+
+    expect(version).toBe(Object.keys(list).length);
+    expect((await history(object)).map(([, name]) => name)).toEqual(Object.keys(list));
+  });
+
+  it("records the position of each key as its version, not the alphabetical order", async () => {
+    const object = newObject();
+
+    await migrate(object, { zeta_first: "SELECT 1;", alpha_second: "SELECT 2;" });
+
+    expect(await history(object)).toEqual([
+      [1, "zeta_first"],
+      [2, "alpha_second"],
+    ]);
+  });
+});
+
+describe("a database from the array format", () => {
+  // The array format stored the version and the name of each item.
+  // The version was always the index of the item plus 1.
+  it("runs only the new migrations when the keys have the old names in the old order", async () => {
+    const object = newObject();
+    await query(
+      object,
+      `CREATE TABLE _migrations (
+         version INTEGER PRIMARY KEY, name TEXT NOT NULL,
+         applied_at TEXT NOT NULL DEFAULT (datetime('now')))`,
+    );
+    await query(object, "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)");
+    await query(object, "INSERT INTO _migrations (version, name) VALUES (1, 'create_users')");
+    const logger = recordingLogger();
+
+    const version = await migrate(object, take(2), { logger });
+
+    expect(version).toBe(2);
+    expect(logger.log.mock.calls).toEqual([["[migrations] Migration 2 (create_orders) ran."]]);
   });
 });
 

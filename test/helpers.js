@@ -58,32 +58,20 @@ export async function history(object) {
 }
 
 // A list of migrations for the tests. Each migration creates one table.
-export const migrations = [
-  {
-    version: 1,
-    name: "create_users",
-    sql: "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL);",
-  },
-  {
-    version: 2,
-    name: "create_orders",
-    sql: `
-      CREATE TABLE orders (
-        id      INTEGER PRIMARY KEY,
-        user_id INTEGER NOT NULL REFERENCES users (id),
-        total   INTEGER NOT NULL
-      );
-      CREATE INDEX orders_user_id ON orders (user_id);
-    `,
-  },
-  {
-    version: 3,
-    name: "create_products",
-    sql: "CREATE TABLE products (id INTEGER PRIMARY KEY, title TEXT NOT NULL);",
-  },
-];
+export const migrations = {
+  create_users: "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL);",
+  create_orders: `
+    CREATE TABLE orders (
+      id      INTEGER PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users (id),
+      total   INTEGER NOT NULL
+    );
+    CREATE INDEX orders_user_id ON orders (user_id);
+  `,
+  create_products: "CREATE TABLE products (id INTEGER PRIMARY KEY, title TEXT NOT NULL);",
+};
 
-// Makes a migration with the version and the SQL that the test needs.
-export function migration(version, sql, name = `migration_${version}`) {
-  return { version, name, sql };
+// Returns the first migrations of a list as a new object.
+export function take(count, list = migrations) {
+  return Object.fromEntries(Object.entries(list).slice(0, count));
 }

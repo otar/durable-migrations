@@ -23,28 +23,16 @@ function getRecord(ctx) {
   return records.get(id);
 }
 
-const migrations = [
-  {
-    version: 1,
-    name: "create_notes",
-    sql: "CREATE TABLE notes (id INTEGER PRIMARY KEY, text TEXT NOT NULL);",
-  },
-  {
-    version: 2,
-    name: "add_notes_created_at",
-    sql: "ALTER TABLE notes ADD COLUMN created_at TEXT;",
-  },
-];
+const migrations = {
+  create_notes: "CREATE TABLE notes (id INTEGER PRIMARY KEY, text TEXT NOT NULL);",
+  add_notes_created_at: "ALTER TABLE notes ADD COLUMN created_at TEXT;",
+};
 
 // Migration 2 refers to a table that does not exist, so it fails.
-const failingMigrations = [
-  migrations[0],
-  {
-    version: 2,
-    name: "index_orders",
-    sql: "CREATE INDEX orders_user_id ON orders (user_id);",
-  },
-];
+const failingMigrations = {
+  create_notes: migrations.create_notes,
+  index_orders: "CREATE INDEX orders_user_id ON orders (user_id);",
+};
 
 // Makes a logger that records each line. If `failing` is "log" or "warn",
 // this function of the logger throws an error after it records the line.
