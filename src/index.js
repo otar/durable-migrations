@@ -26,7 +26,8 @@ const AN_ARRAY =
 const NOT_AN_OBJECT_LITERAL =
   "[migrations] The list of migrations must be an object literal. " +
   'Do not use a module namespace object ("import * as"), a Map, a class instance, ' +
-  "an object without a prototype, or getters. A module namespace object sorts its keys. " +
+  "an object without a prototype, or getters. A module namespace object can sort its keys. " +
+  "Do not copy it with spread (...) or Object.assign(). " +
   'Import the list by its name, for example import { migrations } from "./migrations.js".';
 
 /**
@@ -166,11 +167,11 @@ function readList(migrations) {
     throw new TypeError(AN_ARRAY);
   }
 
-  // "import * as" gives a module namespace object, which sorts its keys.
-  // Without a bundler, and in Vitest, this object has no prototype. Rollup
-  // makes a frozen object without a prototype. esbuild (Wrangler) and
-  // Rolldown make an object with a getter for each export. The loop below
-  // finds the getters.
+  // "import * as" gives a module namespace object. In Node.js, in workerd,
+  // and in the Wrangler bundle, this object sorts its keys. Without a bundler,
+  // and in Vitest, this object has no prototype. Rollup makes a frozen object
+  // without a prototype. esbuild (Wrangler) and Rolldown make an object with
+  // a getter for each export. The property check below finds the getters.
   if (Object.getPrototypeOf(migrations) !== Object.prototype) {
     throw new TypeError(NOT_AN_OBJECT_LITERAL);
   }

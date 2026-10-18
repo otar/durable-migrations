@@ -24,7 +24,8 @@ const AN_ARRAY =
 const NOT_AN_OBJECT_LITERAL =
   "[migrations] The list of migrations must be an object literal. " +
   'Do not use a module namespace object ("import * as"), a Map, a class instance, ' +
-  "an object without a prototype, or getters. A module namespace object sorts its keys. " +
+  "an object without a prototype, or getters. A module namespace object can sort its keys. " +
+  "Do not copy it with spread (...) or Object.assign(). " +
   'Import the list by its name, for example import { migrations } from "./migrations.js".';
 
 function notAnObject(type) {
@@ -69,9 +70,10 @@ class MigrationList {
   }
 }
 
-function withGetter(get) {
+// Makes a list with a getter or a setter for the key "add_index".
+function withAccessor(accessor) {
   const list = { create_notes: SQL };
-  Object.defineProperty(list, "add_index", { get, enumerable: true });
+  Object.defineProperty(list, "add_index", { ...accessor, enumerable: true });
   return list;
 }
 
@@ -89,7 +91,8 @@ describe("a list that is not correct", () => {
     ["an object without a prototype", { __proto__: null, create_notes: SQL }, NOT_AN_OBJECT_LITERAL],
     ["a Map", new Map([["create_notes", SQL]]), NOT_AN_OBJECT_LITERAL],
     ["a class instance", new MigrationList(), NOT_AN_OBJECT_LITERAL],
-    ["a getter", withGetter(() => SQL), NOT_AN_OBJECT_LITERAL],
+    ["a getter", withAccessor({ get: () => SQL }), NOT_AN_OBJECT_LITERAL],
+    ["a setter", withAccessor({ set() {} }), NOT_AN_OBJECT_LITERAL],
   ])("%s causes a TypeError before the database changes", async (_, list, message) => {
     const object = newObject();
 
@@ -134,7 +137,7 @@ describe("a list that is not correct", () => {
   it("does not call a getter", async () => {
     const get = vi.fn(() => SQL);
 
-    await migrateError(newObject(), withGetter(get));
+    await migrateError(newObject(), withAccessor({ get }));
 
     expect(get).not.toHaveBeenCalled();
   });
@@ -152,16 +155,25 @@ describe("a list that is not correct", () => {
 });
 
 describe("a correct list", () => {
-  it.each([
-    ["a frozen object", Object.freeze({ create_notes: SQL })],
-    ["names that start with digits", { "001_create_notes": SQL, "-1": "SELECT 1;", "1.5": "SELECT 1;" }],
-  ])("can be %s", async (_, list) => {
+  it("can be a frozen object", async () => {
     const object = newObject();
 
-    const version = await migrate(object, list);
+    const version = await migrate(object, Object.freeze({ create_notes: SQL }));
 
-    expect(version).toBe(Object.keys(list).length);
-    expect((await history(object)).map(([, name]) => name)).toEqual(Object.keys(list));
+    expect(version).toBe(1);
+    expect(await history(object)).toEqual([[1, "create_notes"]]);
+  });
+
+  it("keeps names with digits that JavaScript does not move in the order of the file", async () => {
+    const object = newObject();
+
+    await migrate(object, { "001_create_notes": SQL, "-1": "SELECT 1;", "1.5": "SELECT 1;" });
+
+    expect(await history(object)).toEqual([
+      [1, "001_create_notes"],
+      [2, "-1"],
+      [3, "1.5"],
+    ]);
   });
 
   it("records the position of each key as its version, not the alphabetical order", async () => {
@@ -177,8 +189,8 @@ describe("a correct list", () => {
 });
 
 describe("a database from the array format", () => {
-  // The array format stored the version and the name of each item.
-  // The version was always the index of the item plus 1.
+  // In the array format, each migration had a version and a name.
+  // The version was always the position of the migration in the array.
   it("runs only the new migrations when the keys have the old names in the old order", async () => {
     const object = newObject();
     await query(

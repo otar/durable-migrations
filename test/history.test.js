@@ -4,11 +4,11 @@ import {
   migrate,
   migrateError,
   migrations,
-  take,
   newObject,
   query,
   recordingLogger,
   tableNames,
+  take,
 } from "./helpers.js";
 
 describe("a database with a higher version than the list", () => {

@@ -58,20 +58,20 @@ The first request starts the object. The runner then runs migrations 1 and 2. Th
 ## Add a migration
 
 1. Stop the Worker.
-2. In `src/migrations.js`, add this migration at the end of the list:
+2. In `src/migrations.js`, add this migration at the end of the list, after `add_users_email`:
 
    ```js
-   {
-     version: 3,
-     name: "add_users_created_at",
-     sql: "ALTER TABLE users ADD COLUMN created_at TEXT;",
-   },
+   add_users_created_at: "ALTER TABLE users ADD COLUMN created_at TEXT;",
    ```
+
+   The key is the name of the migration, and the value is its SQL. The migration is the third key in the list. Thus its version is 3.
 
 3. Start the Worker again with `npm run dev`. The local data stays in `.wrangler/state`.
 4. Send a request to the Worker, for example `curl http://localhost:8787/migrations`.
 
 The runner runs only migration 3. The users that you added stay in the database.
+
+Before you add your own migrations, read the rules in the comment at the top of `src/migrations.js`.
 
 ## Deploy the example
 
