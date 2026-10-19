@@ -24,7 +24,7 @@ ctx.blockConcurrencyWhile(async () => {
 });
 ```
 
-The package exports one function, `runMigrations()` (the runner). Each object runs its new migrations at its next start, before its first request. You do not need a script that runs the migrations on all objects.
+The package exports one function, `runMigrations()` (the runner), and the TypeScript types for it. Each object runs its new migrations at its next start, before its first request. You do not need a script that runs the migrations on all objects.
 
 ## Why durable-migrations
 
@@ -126,7 +126,7 @@ If a migration fails, SQLite cancels all new migrations, and the start of the ob
 runMigrations(storage, migrations, options?)
 ```
 
-- `storage`: the `ctx.storage` of the Durable Object.
+- `storage`: the `ctx.storage` of the Durable Object. If you give `ctx` or `ctx.storage.sql`, the runner throws a `TypeError`.
 - `migrations`: an object literal with all migrations, in order. Each key is the name of a migration, and each value is its SQL.
 - `options.logger` (optional): an object with the functions `log(message)` and `warn(message)`. The default is `console`.
 
@@ -143,7 +143,7 @@ Each error of the runner starts with `[migrations]`. If a migration fails, the `
 | [Rebuild a table](docs/rebuild-a-table.md) | Changes that `ALTER TABLE` cannot do, with foreign keys |
 | [Test and deploy](docs/test-and-deploy.md) | Tests with `wrangler dev` and Vitest, and compatible methods during a deployment |
 | [API](docs/api.md) | Parameters, logger, return value, and each error and warning |
-| [TypeScript](docs/typescript.md) | Type checks with `tsc` and `// @ts-check` |
+| [TypeScript](docs/typescript.md) | The types of the package, and type checks with `tsc` and `// @ts-check` |
 | [Example](examples/basic) | A full Worker that uses the runner |
 | [CHANGELOG.md](CHANGELOG.md) | The changes in each version. Before 1.0.0, a minor version can change the API. |
 

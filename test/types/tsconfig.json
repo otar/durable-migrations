@@ -1,0 +1,22 @@
+// Type tests for src/index.d.ts. "npm run test:types" runs tsc with this file
+// and with the other tsconfig files in this folder. Vitest does not run these files.
+//
+// The module settings are the settings of a Wrangler project in TypeScript.
+// skipLibCheck is false, so tsc also checks the declarations in src/index.d.ts.
+// The files import the package by its name, so tsc reads the "types" condition in "exports".
+{
+  "compilerOptions": {
+    "target": "es2024",
+    "lib": ["es2024"],
+    "module": "es2022",
+    "moduleResolution": "bundler",
+    "types": ["@cloudflare/workers-types"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": false,
+    "isolatedModules": true,
+    "allowJs": true,
+    "checkJs": false
+  },
+  "include": ["*.ts", "*.js"]
+}

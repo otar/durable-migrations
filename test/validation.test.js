@@ -1,5 +1,7 @@
 import { env } from "cloudflare:workers";
+import { runInDurableObject } from "cloudflare:test";
 import { describe, expect, it, vi } from "vitest";
+import { runMigrations } from "../src/index.js";
 import * as namespace from "./fixtures/namespace.js";
 import {
   history,
@@ -27,6 +29,10 @@ const NOT_AN_OBJECT_LITERAL =
   "an object without a prototype, or getters. A module namespace object can sort its keys. " +
   "Do not copy it with spread (...) or Object.assign(). " +
   'Import the list by its name, for example import { migrations } from "./migrations.js".';
+
+const NOT_THE_STORAGE =
+  "[migrations] The storage must be ctx.storage, the storage of the Durable Object. " +
+  "Do not give ctx or ctx.storage.sql.";
 
 function notAnObject(type) {
   return (
@@ -75,6 +81,21 @@ function withAccessor(accessor) {
   const list = { create_notes: SQL };
   Object.defineProperty(list, "add_index", { ...accessor, enumerable: true });
   return list;
+}
+
+// Runs runMigrations() inside the object with the storage that getStorage()
+// returns. getStorage() gets the state of the object, that is ctx.
+// Returns the error that runMigrations() throws. If runMigrations() does not
+// throw, the promise rejects.
+async function storageError(object, getStorage, list = migrations) {
+  try {
+    await runInDurableObject(object, (instance, state) =>
+      runMigrations(getStorage(state), list, { logger: recordingLogger() }),
+    );
+  } catch (error) {
+    return error;
+  }
+  throw new Error("runMigrations() did not throw.");
 }
 
 describe("a list that is not correct", () => {
@@ -255,5 +276,72 @@ describe("the storage", () => {
     const error = await migrateError(object, migrations);
 
     expect(error.message).toMatch(/SQL is not enabled for this Durable Object class/);
+  });
+
+  // Each getStorage() gets ctx and a spy for transactionSync().
+  it.each([
+    ["undefined", () => undefined],
+    ["null", () => null],
+    ["a string", () => "storage"],
+    ["a number", () => 1],
+    ["a function without transactionSync() and sql", () => () => {}],
+    ["an empty object", () => ({})],
+    ["ctx", (state) => state],
+    ["ctx.storage.sql", (state) => state.storage.sql],
+    ["an object with sql but without transactionSync()", (state) => ({ sql: state.storage.sql })],
+    ["an object with transactionSync() but without sql", (_, transactionSync) => ({ transactionSync })],
+  ])("%s causes a TypeError before the database changes", async (_, getStorage) => {
+    const object = newObject();
+    const transactionSync = vi.fn();
+
+    const error = await storageError(object, (state) => getStorage(state, transactionSync));
+
+    expect(error).toBeInstanceOf(TypeError);
+    expect(error.message).toBe(NOT_THE_STORAGE);
+    expect(transactionSync).not.toHaveBeenCalled();
+    expect(await tableNames(object)).toEqual([]);
+  });
+
+  // In a unit test, a deep mock of ctx makes ctx.storage a Proxy around a function.
+  it("can be a function with transactionSync() and sql", async () => {
+    const object = newObject();
+
+    const version = await runInDurableObject(object, (instance, state) => {
+      const storage = Object.assign(() => {}, {
+        sql: state.storage.sql,
+        transactionSync: (closure) => state.storage.transactionSync(closure),
+      });
+      return runMigrations(storage, migrations, { logger: recordingLogger() });
+    });
+
+    expect(version).toBe(3);
+    expect(await history(object)).toEqual([
+      [1, "create_users"],
+      [2, "create_orders"],
+      [3, "create_products"],
+    ]);
+  });
+
+  it("does not call the getter for sql before the list check", async () => {
+    const get = vi.fn(() => ({}));
+    const storage = { transactionSync: vi.fn() };
+    Object.defineProperty(storage, "sql", { get });
+
+    // The storage is correct, so the list check runs and throws.
+    const error = await storageError(newObject(), () => storage, []);
+
+    expect(error.message).toBe(AN_ARRAY);
+    expect(get).not.toHaveBeenCalled();
+    expect(storage.transactionSync).not.toHaveBeenCalled();
+  });
+
+  it("causes an error before the runner checks the list", async () => {
+    const object = newObject();
+
+    const error = await storageError(object, () => undefined, []);
+
+    expect(error).toBeInstanceOf(TypeError);
+    expect(error.message).toBe(NOT_THE_STORAGE);
+    expect(await tableNames(object)).toEqual([]);
   });
 });

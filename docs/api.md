@@ -1,6 +1,6 @@
 # API
 
-The package exports one function, `runMigrations()`. The documentation calls this function "the runner".
+The package exports one function, `runMigrations()`. The documentation calls this function "the runner". The package also exports TypeScript types. See [TypeScript](typescript.md).
 
 ```js
 runMigrations(storage, migrations, options?)
@@ -10,7 +10,7 @@ The runner runs the migrations that did not run on the object before. It is sync
 
 ## Parameters
 
-- `storage`: the `ctx.storage` of the Durable Object.
+- `storage`: the `ctx.storage` of the Durable Object. Do not give `ctx` or `ctx.storage.sql`. The class of the object must be SQLite-backed (`new_sqlite_classes`).
 - `migrations`: an object with all migrations, in order. Each key is the name of a migration, and each value is its SQL:
   - The version of a migration is its position in the list. The first key is version 1, the second key is version 2, and more.
   - The name is a string that is not empty and not only white space. It must not contain only digits, and it must not be `__proto__`. The runner records the name in `_migrations` and compares it at each start.
@@ -63,6 +63,7 @@ The runner returns the database version after the call:
 
 The runner throws an error in these conditions. Each message starts with `[migrations]`.
 
+- **The storage is not correct.** If `storage` is not an object, the runner throws a `TypeError`. If `storage` does not have the function `transactionSync()`, or if it does not have the property `sql`, the runner also throws a `TypeError`. Examples are `ctx` and `ctx.storage.sql`. The message is: `[migrations] The storage must be ctx.storage, the storage of the Durable Object. Do not give ctx or ctx.storage.sql.` The storage of a class without SQLite passes this check. For this storage, the error from Cloudflare starts with `SQL is not enabled for this Durable Object class.`
 - **The list is not correct.** The runner finds these errors before it changes the database:
   - If `migrations` is not an object, the runner throws a `TypeError`. The message gives the type. Example: `[migrations] The list of migrations must be an object. Each key is the name of a migration, and each value is its SQL. It is undefined.`
   - If `migrations` is an array, the runner throws a `TypeError`. This also applies to an empty array. The message tells you how to change the list: `[migrations] The list of migrations must be an object, not an array. Write each migration as a property, in the same order. The key is the name of the migration, and the value is its SQL. Remove the versions. See "Upgrade from the copied files" in the README.` See [Upgrade from the copied files](upgrade-from-copied-files.md).

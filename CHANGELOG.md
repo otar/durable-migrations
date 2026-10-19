@@ -8,7 +8,12 @@ This is the first version as an npm package. Before this version, you copied the
 
 ### Added
 
-- The npm package `durable-migrations`. It has one ESM export, `runMigrations()`. The package has no dependencies.
+- The npm package `durable-migrations`. It exports one function, `runMigrations()`, and the TypeScript types for this function. The package has no dependencies.
+- Type declarations in `src/index.d.ts`. They export the types `MigrationStorage`, `MigrationLogger`, and `RunMigrationsOptions`. `tsc` reads them through the `"types"` condition in `"exports"` of `package.json`. With `"moduleResolution": "node"`, `tsc` reads the field `"types"` of `package.json`. You do not need to change `tsconfig.json` for the package. See [TypeScript](docs/typescript.md).
+  - If the first argument of `runMigrations()` is `ctx` or `ctx.storage.sql`, `tsc` shows an error at the call. `tsc` also finds other incorrect arguments. See [Errors that tsc finds](docs/typescript.md#errors-that-tsc-finds).
+- A storage check. If `storage` is not an object, the runner throws a `TypeError`. If `storage` does not have the function `transactionSync()`, or if it does not have the property `sql`, the runner also throws a `TypeError`. Examples are `ctx` and `ctx.storage.sql`. The runner does this check first, before it changes the database. The message is: `[migrations] The storage must be ctx.storage, the storage of the Durable Object. Do not give ctx or ctx.storage.sql.`
+  - The storage of a class without SQLite passes this check. For this storage, the error from Cloudflare starts with `SQL is not enabled for this Durable Object class.`
+  - Before, the runner threw a `TypeError` without `[migrations]`, for example `storage.transactionSync is not a function`.
 - A name check of the migrations that ran. At each start, the runner compares the names in `_migrations` with the names at the same positions in the list. If a name is different, the runner throws an error, and no migration runs. The error gives the position, the name in `_migrations`, and the name in the list.
 - A hint for comments or extra semicolons after the last statement. If `sql.exec()` fails with `SQL code did not contain a statement.`, the runner adds this hint to the error: `The SQL must end with a statement. Remove comments and extra semicolons after the last statement.` A migration that has only a comment gets the same hint.
 - A foreign key check after the new migrations. If a new migration contains `defer_foreign_keys`, or if `PRAGMA defer_foreign_keys` is ON after the new migrations, the runner runs `PRAGMA foreign_key_check` before the transaction ends. If no migration runs, the runner does not do this check.
@@ -20,9 +25,16 @@ This is the first version as an npm package. Before this version, you copied the
 - The option `logger`. The runner sends its log lines and its warnings to this object. The default is `console`.
 - The runner ignores errors from the logger. Thus a logger error does not stop the object and does not cancel the migrations that ran. The runner also ignores a rejected promise from an async logger.
 - Tests that run the runner in workerd with Vitest and `@cloudflare/vitest-plugin`.
+- Type tests in `test/types`. `npm run test:types` runs `tsc` on correct and incorrect calls of `runMigrations()`, in TypeScript and in JavaScript with `// @ts-check`. It does the tests with `"moduleResolution": "bundler"`, with `"nodenext"`, and with `"exactOptionalPropertyTypes": true`. It also checks `src/index.d.ts` without `@cloudflare/workers-types`.
+- A check of the package files. `npm run check:package` runs `npm pack --dry-run --json`, and it compares the files with this list: `LICENSE`, `README.md`, `package.json`, `src/index.d.ts`, and `src/index.js`. If a file is missing or extra, the command gives the file and fails.
 - An example Worker in `examples/basic`.
-- A CI workflow. On each push to `main` and on each pull request, it runs the tests and builds the example. To build the example, it installs the package as from the registry.
-- A release workflow. It publishes the package to npm with trusted publishing and provenance. It publishes only from a tag that is on `main` and that has the version in `package.json`.
+- A CI workflow. It runs on each push to `main` and on each pull request. It runs the tests and the type tests, and it checks the package files. It also builds the example. To build the example, it installs the package as from the registry.
+- A release workflow. It publishes the package to npm with trusted publishing and provenance. It publishes only from a tag that is on `main` and that has the version in `package.json`. Before it publishes, it does the same tests and checks as the CI workflow.
+- The workflows refer to each action by its full commit SHA, with the version in a comment. A tag can move to different code, but a commit SHA cannot change.
+- A Dependabot configuration in `.github/dependabot.yml`. Each week, Dependabot opens pull requests for new versions of the dev dependencies and of the actions.
+  - One pull request contains all version updates of the dev dependencies, because some of them must change together. For example, `vitest` is a peer dependency of `@cloudflare/vitest-plugin`.
+  - `@cloudflare/vitest-plugin` brings workerd, the Workers runtime. Thus the tests run on newer versions of workerd, and they find changes in the runtime that can break the runner.
+  - Dependabot waits 7 days after the release of a new version before it opens a pull request. This wait does not apply to security updates.
 
 ### Changed
 

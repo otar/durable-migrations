@@ -8,7 +8,7 @@ Each Durable Object has its own SQLite database. The runner keeps the migration 
 
 When the object starts, the runner does these steps:
 
-1. It makes sure that the list of migrations and the options are correct. The version of each migration is the position of its key in the list.
+1. It makes sure that the storage, the list of migrations, and the options are correct. The version of each migration is the position of its key in the list.
 2. If the table `_migrations` does not exist, it creates this table.
 3. It reads all rows of `_migrations`.
 4. It compares the name of each row with the name at the same position in the list. For example, it compares the second key with the name of the row that has version 2. If a name is different, it throws an error, and no migration runs. A row with a version that is higher than the number of migrations in the list comes from newer code. The runner does not compare its name.
@@ -27,7 +27,7 @@ Steps 2 to 7 occur in one transaction, inside `storage.transactionSync()`.
 | A migration leaves rows that break a foreign key (with `PRAGMA defer_foreign_keys`). | SQLite cancels all new migrations. The database stays at its old version. The runner throws an error that gives the tables. The result is the same as for a failed migration. |
 | A row in `_migrations` has a name that is different from the name at the same position in the list. Example: you renamed or moved a deployed migration, or you added a migration before it. | The runner throws an error before a migration runs. The database does not change. The object does not start until you deploy code with the old name at the old position. |
 | The database version is higher than the last version in the list. This can occur after a rollback of a deployment. | The runner writes a warning to the log. No migration runs, and the object starts. |
-| The list of migrations or the options are not correct. | The runner throws an error before it changes the database. The object does not start. |
+| The storage, the list of migrations, or the options are not correct. | The runner throws an error before it changes the database. The object does not start. |
 
 The error message gives the failed migration and the cause, for example:
 
