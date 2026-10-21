@@ -40,14 +40,15 @@ npm accepts a trusted publisher only for a package that is on npm. Thus you publ
 7. In the folder of the new clone, run `npm ci`.
 8. Run `npm test`.
 9. Run `npm run test:types`.
-10. Run `npm run check:package`.
+10. Run `npm run test:types:compat`.
+11. Run `npm run check:package`.
 
     This command makes sure that the package has only `LICENSE`, `README.md`, `package.json`, `src/index.d.ts`, and `src/index.js`. If a file is missing or extra, the command fails.
 
-11. Run `npm login`.
-12. Run `npm publish --access public`.
-13. Run `git tag -a v0.1.0 -m v0.1.0`.
-14. Run `git push origin v0.1.0`.
+12. Run `npm login`.
+13. Run `npm publish --access public`.
+14. Run `git tag -a v0.1.0 -m v0.1.0`.
+15. Run `git push origin v0.1.0`.
 
 The release workflow runs the tests. It finds 0.1.0 on npm, and it does not publish it again. Version 0.1.0 has no provenance statement.
 
@@ -116,6 +117,8 @@ One pull request contains all version updates of the dev dependencies. `@cloudfl
 - If a pull request changes the major version of an action, read the release notes before you merge. CI does not run `release.yml`. Thus CI does not do a test of the inputs that only `release.yml` uses, for example `fetch-depth` and `registry-url`.
 - If the CI workflow passes on the pull request, merge the pull request.
 - If the CI workflow fails, do not merge the pull request. Find the change in the runtime, in a dev dependency, or in an action. Then correct the runner, the tests, or the workflow in a different pull request.
+
+Dependabot does not update `typescript-5`, the version of TypeScript 5 that `npm run test:types:compat` uses. To change its version, edit `package.json`. Then run `npm install`. TypeScript 6 and later show an error for `"moduleResolution": "node"`.
 
 Each workflow refers to an action by its full commit SHA, not by a tag. If you add a step with `uses:`, also use the full commit SHA. Put the version in a comment after it, for example `# v7.0.1`. Dependabot updates the commit SHA and the comment.
 

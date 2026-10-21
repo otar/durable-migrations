@@ -43,6 +43,9 @@ jobs:
       - name: Run the type tests
         run: npm run test:types
 
+      - name: Run the type tests with TypeScript 5
+        run: npm run test:types:compat
+
       - name: Make sure that the package has only the expected files
         run: npm run check:package
 

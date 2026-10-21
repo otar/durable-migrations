@@ -1,5 +1,7 @@
-// Type tests for src/index.d.ts. "npm run test:types" runs tsc with this file
-// and with the other tsconfig files in this folder. Vitest does not run these files.
+// Type tests for src/index.d.ts. "npm run test:types" runs TypeScript 7 with this file
+// and with the other tsconfig files in this folder, but not with tsconfig.node10.json.
+// "npm run test:types:compat" runs TypeScript 5 with all tsconfig files in this folder.
+// Vitest does not run these files.
 //
 // The module settings are the settings of a Wrangler project in TypeScript.
 // skipLibCheck is false, so tsc also checks the declarations in src/index.d.ts.

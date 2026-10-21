@@ -36,13 +36,15 @@
   "sideEffects": false,
   "scripts": {
     "test": "vitest run",
-    "test:types": "tsc -p test/types && tsc -p test/types/tsconfig.nodenext.json && tsc -p test/types/tsconfig.exact.json && tsc -p test/types/tsconfig.standalone.json",
+    "test:types": "node node_modules/typescript/bin/tsc -p test/types && node node_modules/typescript/bin/tsc -p test/types/tsconfig.nodenext.json && node node_modules/typescript/bin/tsc -p test/types/tsconfig.exact.json && node node_modules/typescript/bin/tsc -p test/types/tsconfig.standalone.json",
+    "test:types:compat": "node node_modules/typescript-5/bin/tsc -p test/types && node node_modules/typescript-5/bin/tsc -p test/types/tsconfig.nodenext.json && node node_modules/typescript-5/bin/tsc -p test/types/tsconfig.exact.json && node node_modules/typescript-5/bin/tsc -p test/types/tsconfig.standalone.json && node node_modules/typescript-5/bin/tsc -p test/types/tsconfig.node10.json",
     "check:package": "node scripts/check-package.js"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "^1.4.4",
     "@cloudflare/workers-types": "^5.20261018.1",
     "typescript": "^7.0.2",
+    "typescript-5": "npm:typescript@5.9.3",
     "vitest": "^5.0.5"
   }
 }

@@ -30,6 +30,8 @@ This is the first version as an npm package. Before this version, you copied the
   - The tests of the foreign key check use `defer_foreign_keys` in lower case, upper case, and mixed case. One test sets the pragma to ON before the call.
   - Other tests count the SQL statements of a start, check the columns of `_migrations`, and use a logger that is a class instance.
 - Type tests in `test/types`. `npm run test:types` runs `tsc` on correct and incorrect calls of `runMigrations()`, in TypeScript and in JavaScript with `// @ts-check`. It does the tests with `"moduleResolution": "bundler"`, with `"nodenext"`, and with `"exactOptionalPropertyTypes": true`. It also checks `src/index.d.ts` without `@cloudflare/workers-types`.
+- Type tests with TypeScript 5.9.3. `npm run test:types` uses TypeScript 7. `npm run test:types:compat` does the same type tests with TypeScript 5.9.3. It also does them with `"moduleResolution": "node"`. The CI workflow and the release workflow run this command after `npm run test:types`.
+  - The dev dependency `typescript-5` is TypeScript 5.9.3 with an `npm:` alias. Dependabot does not update it.
 - A check of the package files. `npm run check:package` runs `npm pack --dry-run --json`, and it compares the files with this list: `LICENSE`, `README.md`, `package.json`, `src/index.d.ts`, and `src/index.js`. If a file is missing or extra, the command gives the file and fails.
 - An example Worker in `examples/basic`.
 - More documentation:
