@@ -10,5 +10,7 @@
   },
   // These Wrangler migrations create the Durable Object class.
   // They do not change your tables. The runner changes the tables with src/migrations.js.
+  // With Wrangler 4.107.0 or later, you can use "exports" instead of "migrations".
+  // See step 5 of "Quick start" in the README of durable-migrations.
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["MyDurableObject"] }]
 }

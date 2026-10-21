@@ -62,6 +62,8 @@ With `ON DELETE SET NULL` or `ON DELETE SET DEFAULT`, the rows stay in `orders` 
 
 `DELETE FROM orders` also runs the `ON DELETE` actions of the tables that refer to `orders`. This procedure also runs the triggers of `orders`. Before you use the procedure, look at these tables and triggers.
 
-Both procedures copy all rows of `users` two times. The second procedure also copies all rows of `orders` two times. If the tables are large, make sure that all new migrations complete in less than 30 seconds.
+Both procedures copy all rows of `users` two times. The second procedure also copies all rows of `orders` two times. If the tables are large, make sure that all new migrations complete in less than 30 seconds. See [Measure the time of the migrations](test-and-deploy.md#measure-the-time-of-the-migrations).
+
+A new constraint can break the writes of the old code after a rollback. See [Keep the schema compatible with old code](writing-migrations.md#keep-the-schema-compatible-with-old-code).
 
 CAUTION: Before you deploy this migration, do a test of it in `wrangler dev`. Before the test, put data in all tables. Before and after the migration, count the rows of each table that refers to the rebuilt table. Make sure that the counts are the same. Also make sure that the foreign key columns of these tables did not change. After the migration, make sure that `PRAGMA foreign_key_check` returns no rows.

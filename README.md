@@ -36,7 +36,7 @@ The package exports one function, `runMigrations()` (the runner), and the TypeSc
 
 ## Quick start
 
-**Requirement:** a SQLite-backed Durable Object class (`new_sqlite_classes`). The runner does not operate with the old key-value storage.
+**Requirement:** a SQLite-backed Durable Object class. In the Wrangler configuration file, this is `"storage": "sqlite"` in `exports`, or `new_sqlite_classes` in `migrations`. The runner does not operate with the old key-value storage.
 
 1. Install the package:
 
@@ -81,17 +81,29 @@ The package exports one function, `runMigrations()` (the runner), and the TypeSc
    }
    ```
 
-5. If the class is new, add it to `new_sqlite_classes` in the Wrangler configuration file:
+5. If the class is new, declare it in the Wrangler configuration file. Use `exports` or `migrations`. Do not use both for Durable Object classes in one configuration file.
 
-   ```jsonc
-   "migrations": [
-     { "tag": "v1", "new_sqlite_classes": ["MyDurableObject"] }
-   ]
-   ```
+   - `exports` (Wrangler 4.107.0 or later):
+
+     ```jsonc
+     "exports": {
+       "MyDurableObject": { "type": "durable-object", "storage": "sqlite" }
+     }
+     ```
+
+   - `migrations`:
+
+     ```jsonc
+     "migrations": [
+       { "tag": "v1", "new_sqlite_classes": ["MyDurableObject"] }
+     ]
+     ```
+
+     If `migrations` already has an entry, do not change it. Add a new entry with a new tag, for example `"v2"`.
 
 6. Deploy the Worker.
 
-[`examples/basic`](examples/basic) has a full Worker that uses the runner. If you copied `migrate.js` into your project before, see [Upgrade from the copied files](#upgrade-from-the-copied-files).
+[`examples/basic`](examples/basic) has a full Worker that uses the runner. If you copied `migrate.js` into your project before, see [Upgrade from the copied files](#upgrade-from-the-copied-files). If a different tool runs your migrations, for example durable-utils, `@cloudflare/actors`, or Drizzle, see [Change from other tools](docs/change-from-other-tools.md).
 
 ## How it works
 
@@ -103,7 +115,7 @@ At each start, the runner compares `_migrations` with the list. Then it runs the
 [migrations] Migration 2 (add_users_email) ran.
 ```
 
-`blockConcurrencyWhile()` holds all requests until the runner is complete. As a result, a request never gets the new code with the old schema.
+`blockConcurrencyWhile()` holds all requests until the runner is complete. If the callback does not catch the error of the runner, a request never gets the new code with the old schema.
 
 If a migration fails, SQLite cancels all new migrations, and the start of the object fails. The runner tries again at the next start. [How it works](docs/how-it-works.md) gives the full lifecycle.
 
@@ -115,7 +127,9 @@ If a migration fails, SQLite cancels all new migrations, and the start of the ob
 - Keep all migrations in one object literal. Import the list by its name. Do not use `import * as`, spread syntax (`...`), or `Object.assign()`. Do not sort the keys.
 - Do not put a comment or an extra semicolon after the last statement of a migration.
 - Do not use `BEGIN`, `COMMIT`, `ROLLBACK`, or `SAVEPOINT`. The runner controls the transaction.
-- Make sure that all new migrations complete in less than 30 seconds. This is the time limit of `blockConcurrencyWhile()`.
+- Make sure that all new migrations complete in less than 30 seconds. This is the time limit of `blockConcurrencyWhile()` and the default CPU time limit. If you set a lower `limits.cpu_ms`, use that value. Local tests do not stop a slow migration.
+- Do not catch the error of the runner in the callback of `blockConcurrencyWhile()`. If you catch it, throw it again.
+- Each migration must be compatible with the old code that you can roll back to. See [Keep the schema compatible with old code](docs/writing-migrations.md#keep-the-schema-compatible-with-old-code).
 - Before you deploy, do a test of the new migrations on an object that has the old schema.
 
 [Write migrations](docs/writing-migrations.md) gives all rules and the reasons for them.
@@ -138,12 +152,13 @@ Each error of the runner starts with `[migrations]`. If a migration fails, the `
 
 | Guide | Content |
 |---|---|
-| [How it works](docs/how-it-works.md) | The steps of the runner, when an object runs its migrations, and why you do not need a script |
-| [Write migrations](docs/writing-migrations.md) | How to add a migration, names and order, and all rules |
+| [How it works](docs/how-it-works.md) | The steps of the runner, when an object runs its migrations, why you do not need a script, and how to delete all data |
+| [Write migrations](docs/writing-migrations.md) | How to add a migration, names and order, linters that sort keys, `.sql` files, a schema that old code can use, and all rules |
 | [Rebuild a table](docs/rebuild-a-table.md) | Changes that `ALTER TABLE` cannot do, with foreign keys |
-| [Test and deploy](docs/test-and-deploy.md) | Tests with `wrangler dev` and Vitest, and compatible methods during a deployment |
+| [Test and deploy](docs/test-and-deploy.md) | Tests with `wrangler dev` and Vitest, the time of the migrations, and compatible code during a deployment |
 | [API](docs/api.md) | Parameters, logger, return value, and each error and warning |
 | [TypeScript](docs/typescript.md) | The types of the package, and type checks with `tsc` and `// @ts-check` |
+| [Change from other tools](docs/change-from-other-tools.md) | How to change from durable-utils, `@cloudflare/actors`, Drizzle, or a runner that you wrote |
 | [Example](examples/basic) | A full Worker that uses the runner |
 | [CHANGELOG.md](CHANGELOG.md) | The changes in each version. Before 1.0.0, a minor version can change the API. |
 

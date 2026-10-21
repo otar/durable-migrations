@@ -10,7 +10,7 @@ The runner runs the migrations that did not run on the object before. It is sync
 
 ## Parameters
 
-- `storage`: the `ctx.storage` of the Durable Object. Do not give `ctx` or `ctx.storage.sql`. The class of the object must be SQLite-backed (`new_sqlite_classes`).
+- `storage`: the `ctx.storage` of the Durable Object. Do not give `ctx` or `ctx.storage.sql`. The class of the object must be SQLite-backed: `"storage": "sqlite"` in `exports`, or `new_sqlite_classes` in `migrations` in the Wrangler configuration file.
 - `migrations`: an object with all migrations, in order. Each key is the name of a migration, and each value is its SQL:
   - The version of a migration is its position in the list. The first key is version 1, the second key is version 2, and more.
   - The name is a string that is not empty and not only white space. It must not contain only digits, and it must not be `__proto__`. The runner records the name in `_migrations` and compares it at each start.
@@ -83,7 +83,7 @@ The runner throws an error in these conditions. Each message starts with `[migra
 
 In all these conditions, the database does not change. If the error occurs after a new migration ran, SQLite cancels all new migrations. If the error occurs in steps 2 to 7 of [How the runner operates](how-it-works.md#how-the-runner-operates), the runner also sets `PRAGMA defer_foreign_keys` to OFF.
 
-Errors from Cloudflare do not start with `[migrations]`. An example is the error for an object without SQLite. A class in `new_classes` uses the old key-value storage. In an object of this class, the runner fails with an error that starts with `SQL is not enabled for this Durable Object class.` This error also says that you cannot change the storage of a class after you deploy it to production.
+Errors from Cloudflare do not start with `[migrations]`. An example is the error for an object without SQLite. A class in `new_classes`, or with `"storage": "legacy-kv"` in `exports`, uses the old key-value storage. In an object of this class, the runner fails with an error that starts with `SQL is not enabled for this Durable Object class.` This error also says that you cannot change the storage of a class after you deploy it to production.
 
 If the database version is higher than the last version in the list, the runner does not throw an error. It calls `logger.warn()`, and no migration runs. Example:
 

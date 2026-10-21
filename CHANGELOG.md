@@ -32,6 +32,17 @@ This is the first version as an npm package. Before this version, you copied the
 - Type tests in `test/types`. `npm run test:types` runs `tsc` on correct and incorrect calls of `runMigrations()`, in TypeScript and in JavaScript with `// @ts-check`. It does the tests with `"moduleResolution": "bundler"`, with `"nodenext"`, and with `"exactOptionalPropertyTypes": true`. It also checks `src/index.d.ts` without `@cloudflare/workers-types`.
 - A check of the package files. `npm run check:package` runs `npm pack --dry-run --json`, and it compares the files with this list: `LICENSE`, `README.md`, `package.json`, `src/index.d.ts`, and `src/index.js`. If a file is missing or extra, the command gives the file and fails.
 - An example Worker in `examples/basic`.
+- More documentation:
+  - A Vitest test on an object with the old schema. The Vitest example uses `newUniqueId()`, because the plugin keeps the storage for all tests in one file. See [Do a test with Vitest on an object with the old schema](docs/test-and-deploy.md#do-a-test-with-vitest-on-an-object-with-the-old-schema).
+  - A rule for the callback of `blockConcurrencyWhile()`. Do not catch the error of the runner. If you catch it, throw it again. See [Rules](docs/writing-migrations.md#rules).
+  - A CAUTION for an object that an alarm starts. If the runner throws an error, Cloudflare can delete the alarm. See [When the migrations run](docs/how-it-works.md#when-the-migrations-run).
+  - How to measure the time of the migrations. Local tests do not stop a slow migration. See [Measure the time of the migrations](docs/test-and-deploy.md#measure-the-time-of-the-migrations).
+  - The `exports` form of the Wrangler configuration file, `"storage": "sqlite"`, next to `new_sqlite_classes`. See [Quick start](README.md#quick-start).
+  - How to stop a linter that sorts the keys of the list, and how to correct two keys with the same name. See [Linters that sort the keys](docs/writing-migrations.md#linters-that-sort-the-keys).
+  - What to do after `deleteAll()`: call `ctx.abort()`. See [Delete all data of an object](docs/how-it-works.md#delete-all-data-of-an-object).
+  - How to see the migration history of a deployed object in Data Studio. Rules that tell you not to change `_migrations` or the schema by hand. See [See the migration history](docs/how-it-works.md#see-the-migration-history) and [Rules](docs/writing-migrations.md#rules).
+  - How to keep each migration in a `.sql` file. See [Keep each migration in a .sql file](docs/writing-migrations.md#keep-each-migration-in-a-sql-file).
+  - How to change from durable-utils, `@cloudflare/actors`, Drizzle, or a runner that you wrote. See [Change from other tools](docs/change-from-other-tools.md).
 - A CI workflow. It runs on each push to `main` and on each pull request. It runs the tests and the type tests, and it checks the package files. It also builds the example. To build the example, it installs the package as from the registry.
 - A release workflow. It publishes the package to npm with trusted publishing and provenance. It publishes only from a tag that is on `main` and that has the version in `package.json`. Before it publishes, it does the same tests and checks as the CI workflow.
 - The workflows refer to each action by its full commit SHA, with the version in a comment. A tag can move to different code, but a commit SHA cannot change.
@@ -64,6 +75,7 @@ This is the first version as an npm package. Before this version, you copied the
 ### Fixed
 
 - The procedure that rebuilds a table, in [Rebuild a table](docs/rebuild-a-table.md). The old procedure in the README failed with `FOREIGN KEY constraint failed` when rows in other tables referred to the table.
+- The statement about a rollback, in [Keep the methods compatible during a deployment](docs/test-and-deploy.md#keep-the-methods-compatible-during-a-deployment). The old README said that the schema does not cause errors during a gradual deployment or a rollback. After a rollback, and after some gradual deployments, the old code runs on the new schema. Thus each migration must be compatible with the old code. See [Keep the schema compatible with old code](docs/writing-migrations.md#keep-the-schema-compatible-with-old-code).
 
 ### Upgrade from the copied files
 

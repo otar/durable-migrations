@@ -12,7 +12,9 @@ export class MyDurableObject extends DurableObject {
     super(ctx, env);
 
     // Run the new migrations before the object accepts requests.
-    // If a migration fails, Cloudflare resets the object.
+    // If the runner throws an error, Cloudflare resets the object. Do not
+    // catch this error. If you catch it, throw it again. If the callback
+    // does not throw it, the object starts with the old schema.
     ctx.blockConcurrencyWhile(async () => {
       runMigrations(ctx.storage, migrations);
     });
