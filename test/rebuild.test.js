@@ -112,6 +112,30 @@ async function tableSql(object, name) {
   return row.sql;
 }
 
+// Runs the migrations with a storage that records the SQL of each sql.exec() call.
+// Returns the recorded SQL.
+function migrateAndRecordSql(object, list) {
+  return runInDurableObject(object, (instance, state) => {
+    const statements = [];
+    const storage = {
+      sql: {
+        exec(sql, ...bindings) {
+          statements.push(sql);
+          return state.storage.sql.exec(sql, ...bindings);
+        },
+      },
+      transactionSync: (closure) => state.storage.transactionSync(closure),
+    };
+    runMigrations(storage, list, { logger: recordingLogger() });
+    return statements;
+  });
+}
+
+// Returns how many times the recorded SQL runs PRAGMA foreign_key_check.
+function foreignKeyChecks(statements) {
+  return statements.filter((sql) => /foreign_key_check/i.test(sql)).length;
+}
+
 // Runs the migrations, and reads PRAGMA defer_foreign_keys in the same call.
 // Cloudflare writes the changes only after the call, so the pragma still has
 // the value that the runner left.
@@ -278,19 +302,47 @@ describe("the foreign key check after the new migrations", () => {
     expect(await orders(object)).toEqual(ORDERS);
   });
 
-  it("finds the errors when a migration sets the pragma to OFF again", async () => {
-    // PRAGMA defer_foreign_keys = OFF clears the count of errors in SQLite.
-    // Without the check, the commit succeeds and keeps the orphan rows.
+  // SQLite accepts the name of a pragma in any letter case. The runner must also find it.
+  it.each(["PRAGMA defer_foreign_keys", "PRAGMA DEFER_FOREIGN_KEYS", "pragma Defer_Foreign_Keys"])(
+    "finds the errors when a migration sets the pragma to OFF again with %s",
+    async (pragma) => {
+      // PRAGMA defer_foreign_keys = OFF clears the count of errors in SQLite.
+      // Without the check, the commit succeeds and keeps the orphan rows.
+      const object = await newObjectWithData();
+      const deleteUsers = {
+        delete_users: `${pragma} = ON;\nDELETE FROM users;\n${pragma} = OFF;`,
+      };
+
+      const error = await migrateError(object, { ...SCHEMA, ...deleteUsers });
+
+      expect(error.message).toBe(FOREIGN_KEY_ERROR);
+      expect(await history(object)).toEqual(HISTORY);
+      expect(await users(object)).toEqual(USERS);
+    },
+  );
+
+  it("finds the errors when the pragma is ON before the call", async () => {
+    // The new migration does not contain defer_foreign_keys.
+    // Thus the runner must read the pragma to find the errors.
     const object = await newObjectWithData();
-    const deleteUsers = {
-      delete_users: "PRAGMA defer_foreign_keys = ON;\nDELETE FROM users;\nPRAGMA defer_foreign_keys = OFF;",
-    };
+    const deleteUsers = { delete_users: "DELETE FROM users;" };
 
-    const error = await migrateError(object, { ...SCHEMA, ...deleteUsers });
+    const result = await runInDurableObject(object, (instance, state) => {
+      state.storage.sql.exec("PRAGMA defer_foreign_keys = ON");
+      let message;
+      try {
+        runMigrations(state.storage, { ...SCHEMA, ...deleteUsers }, { logger: recordingLogger() });
+      } catch (error) {
+        message = error.message;
+      }
+      const pragma = state.storage.sql.exec("PRAGMA defer_foreign_keys").one();
+      return { message, deferForeignKeys: pragma.defer_foreign_keys };
+    });
 
-    expect(error.message).toBe(FOREIGN_KEY_ERROR);
+    expect(result).toEqual({ message: FOREIGN_KEY_ERROR, deferForeignKeys: 0 });
     expect(await history(object)).toEqual(HISTORY);
     expect(await users(object)).toEqual(USERS);
+    expect(await orders(object)).toEqual(ORDERS);
   });
 
   it.each([
@@ -345,5 +397,30 @@ describe("the foreign key check after the new migrations", () => {
     );
     expect(await tableNames(object)).toEqual(["_migrations", "orders", "users"]);
     expect(await history(object)).toEqual(HISTORY);
+  });
+});
+
+describe("the SQL that the runner runs", () => {
+  it("runs only two statements at a start without new migrations", async () => {
+    const object = await newObjectWithData();
+
+    const statements = await migrateAndRecordSql(object, SCHEMA);
+
+    expect(statements).toHaveLength(2);
+  });
+
+  it("does not run PRAGMA foreign_key_check when PRAGMA defer_foreign_keys is OFF and no new migration contains defer_foreign_keys", async () => {
+    const statements = await migrateAndRecordSql(newObject(), SCHEMA);
+
+    expect(foreignKeyChecks(statements)).toBe(0);
+  });
+
+  it("runs PRAGMA foreign_key_check one time when a new migration contains defer_foreign_keys", async () => {
+    const object = await newObjectWithData();
+
+    const statements = await migrateAndRecordSql(object, { ...SCHEMA, ...COPY_USERS });
+
+    expect(foreignKeyChecks(statements)).toBe(1);
+    expect(await history(object)).toEqual([...HISTORY, [3, "rebuild_users"]]);
   });
 });

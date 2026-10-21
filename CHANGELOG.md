@@ -26,6 +26,9 @@ This is the first version as an npm package. Before this version, you copied the
 - The option `logger`. The runner sends its log lines and its warnings to this object. The default is `console`.
 - The runner ignores errors from the logger. Thus a logger error does not stop the object and does not cancel the migrations that ran. The runner also ignores a rejected promise from an async logger.
 - Tests that run the runner in workerd with Vitest and `@cloudflare/vitest-plugin`.
+  - The tests include a deployed migration that moved, and a new migration before the deployed migrations. They also include a table, a view, and an index with the name `_migrations` from other code.
+  - The tests of the foreign key check use `defer_foreign_keys` in lower case, upper case, and mixed case. One test sets the pragma to ON before the call.
+  - Other tests count the SQL statements of a start, check the columns of `_migrations`, and use a logger that is a class instance.
 - Type tests in `test/types`. `npm run test:types` runs `tsc` on correct and incorrect calls of `runMigrations()`, in TypeScript and in JavaScript with `// @ts-check`. It does the tests with `"moduleResolution": "bundler"`, with `"nodenext"`, and with `"exactOptionalPropertyTypes": true`. It also checks `src/index.d.ts` without `@cloudflare/workers-types`.
 - A check of the package files. `npm run check:package` runs `npm pack --dry-run --json`, and it compares the files with this list: `LICENSE`, `README.md`, `package.json`, `src/index.d.ts`, and `src/index.js`. If a file is missing or extra, the command gives the file and fails.
 - An example Worker in `examples/basic`.

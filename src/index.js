@@ -95,6 +95,8 @@ export function runMigrations(storage, migrations, options = {}) {
 // Runs the new migrations inside the transaction of runMigrations().
 // Returns the version before the call and the migrations that ran.
 function migrate(sql, migrations) {
+  // The table and its columns are part of the API. A change to them is a
+  // breaking change. See "Versions" in docs/api.md.
   sql.exec(`
     CREATE TABLE IF NOT EXISTS ${TABLE} (
       version    INTEGER PRIMARY KEY,
