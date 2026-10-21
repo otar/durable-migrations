@@ -103,9 +103,20 @@ function migrate(sql, migrations) {
     )
   `);
 
-  const history = sql
-    .exec(`SELECT version, name FROM ${TABLE} ORDER BY version`)
-    .toArray();
+  // Other code can make a table or a view with the same name. If it does not
+  // have the columns version and name, the SELECT fails.
+  let history;
+  try {
+    history = sql
+      .exec(`SELECT version, name FROM ${TABLE} ORDER BY version`)
+      .toArray();
+  } catch (error) {
+    throw new Error(
+      `[migrations] The runner cannot read the table ${TABLE}. ` +
+        `Make sure that no other code uses this table name. Cause: ${error?.message}`,
+      { cause: error },
+    );
+  }
 
   checkHistory(history, migrations);
 

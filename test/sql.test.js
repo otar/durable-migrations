@@ -6,6 +6,7 @@ import {
   migrations,
   newObject,
   query,
+  recordingLogger,
   tableNames,
   take,
 } from "./helpers.js";
@@ -181,5 +182,63 @@ describe("a migration that changes the table _migrations", () => {
       /^\[migrations\] Migration 1 \(create_notes\) failed\. The database stays at version 0\. Cause: UNIQUE constraint failed/,
     );
     expect(await tableNames(object)).toEqual([]);
+  });
+});
+
+// Other code can make a table, a view, or an index with the name _migrations.
+// If a table or a view does not have the columns version and name, the runner
+// cannot read it.
+describe("_migrations from other code", () => {
+  // Returns the type, the name, and the SQL of each table, index, and view.
+  function schema(object) {
+    return query(object, "SELECT type, name, sql FROM sqlite_master ORDER BY name");
+  }
+
+  it.each([
+    [
+      "a table without the column version",
+      "CREATE TABLE _migrations (id INTEGER PRIMARY KEY, name TEXT NOT NULL);\n" +
+        "INSERT INTO _migrations (id, name) VALUES (1, 'init');",
+      "version",
+    ],
+    [
+      "a table without the column name",
+      "CREATE TABLE _migrations (version INTEGER PRIMARY KEY, title TEXT NOT NULL);\n" +
+        "INSERT INTO _migrations (version, title) VALUES (1, 'init');",
+      "name",
+    ],
+    ["a view", "CREATE VIEW _migrations AS SELECT 1 AS id, 'init' AS title;", "version"],
+  ])("causes an error and changes nothing when it is %s", async (_, sql, column) => {
+    const object = newObject();
+    await query(object, sql);
+    const before = await schema(object);
+    const rows = await query(object, "SELECT * FROM _migrations");
+    const logger = recordingLogger();
+
+    const error = await migrateError(object, migrations, { logger });
+
+    expect(error.constructor).toBe(Error);
+    expect(error.cause).toBeInstanceOf(Error);
+    expect(error.cause.message).toMatch(new RegExp(`^no such column: ${column}`));
+    expect(error.message).toBe(
+      "[migrations] The runner cannot read the table _migrations. " +
+        `Make sure that no other code uses this table name. Cause: ${error.cause.message}`,
+    );
+    expect(logger.log).not.toHaveBeenCalled();
+    expect(logger.warn).not.toHaveBeenCalled();
+    expect(await schema(object)).toEqual(before);
+    expect(await query(object, "SELECT * FROM _migrations")).toEqual(rows);
+  });
+
+  // An index stops the CREATE of the runner. The runner does not change the
+  // error of SQLite. See "Errors and warnings" in docs/api.md.
+  it("keeps the error of SQLite when it is an index", async () => {
+    const object = newObject();
+    await query(object, "CREATE TABLE notes (id INTEGER);\nCREATE INDEX _migrations ON notes (id);");
+
+    const error = await migrateError(object, migrations);
+
+    expect(error.message).toMatch(/^there is already an index named _migrations/);
+    expect(await tableNames(object)).toEqual(["notes"]);
   });
 });
