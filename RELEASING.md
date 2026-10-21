@@ -1,31 +1,53 @@
 # Releasing
 
-This file is for the maintainer. It gives the procedures to publish a new version of `durable-migrations` to npm and to merge the Dependabot pull requests.
+This file is for the maintainer. It gives the procedures to make the repository public, to publish a new version of `durable-migrations` to npm, and to merge the Dependabot pull requests.
 
 The workflow [`.github/workflows/release.yml`](.github/workflows/release.yml) publishes the package when you push a tag `v*`. It uses npm trusted publishing (OIDC), so it does not need an npm token. npm also adds a provenance statement to each version that the workflow publishes.
 
-You need write access to the repository `otar/durable-migrations` and an npm account with two-factor authentication.
+You must be the owner of the repository `otar/durable-migrations`, because only the owner can change its settings. You also need an npm account with two-factor authentication.
+
+## Make the repository public
+
+The release workflow publishes with provenance. npm does not accept provenance from a private repository. If the repository is private, the step **Publish to npm** fails with `E422`. Thus the repository must be public before you push the tag of a version that the workflow publishes.
+
+The publish of 0.1.0 from your computer has no provenance. Thus it also operates from a private repository. But the links in the README on npmjs.com operate only when the repository is public. Thus, before you publish 0.1.0, do this procedure.
+
+1. Search all branches and the full history of the repository for secrets, for example tokens, passwords, and private keys. After this procedure, all commits are public.
+2. If you find a secret, make it invalid, for example delete the token.
+3. On GitHub, go to **Settings** > **General** of the repository.
+4. In **Danger Zone**, select **Change visibility**.
+5. Select the public visibility.
+6. Select the button that confirms that you change the visibility of the correct repository.
+7. Select **I have read and understand these effects**.
+8. Select **Make this repository public**.
+9. Go to **Settings** > **Advanced Security**.
+10. To the right of **Private vulnerability reporting**, select **Enable**.
+11. If **Secret Protection** is not on, select **Enable** to the right of it.
+12. To the right of **Push protection**, select **Enable**.
+13. Sign out of GitHub, or open a private window of your browser.
+14. Open `https://github.com/otar/durable-migrations`. Make sure that the repository opens.
 
 ## Publish the first version
 
 npm accepts a trusted publisher only for a package that is on npm. Thus you publish the first version, 0.1.0, from your computer.
 
-1. Make sure that the CI workflow passes on `main`.
-2. In `CHANGELOG.md`, replace `Unreleased` with the date of the release, for example `2026-10-20`.
-3. Commit the change.
-4. Push the commit to `main`.
-5. Make a new clone of `main`.
-6. In the folder of the new clone, run `npm ci`.
-7. Run `npm test`.
-8. Run `npm run test:types`.
-9. Run `npm run check:package`.
+1. Make sure that the repository is public. See [Make the repository public](#make-the-repository-public).
+2. Make sure that the CI workflow passes on `main`.
+3. In `CHANGELOG.md`, replace `Unreleased` with the date of the release, for example `2026-10-20`.
+4. Commit the change.
+5. Push the commit to `main`.
+6. Make a new clone of `main`.
+7. In the folder of the new clone, run `npm ci`.
+8. Run `npm test`.
+9. Run `npm run test:types`.
+10. Run `npm run check:package`.
 
-   This command makes sure that the package has only `LICENSE`, `README.md`, `package.json`, `src/index.d.ts`, and `src/index.js`. If a file is missing or extra, the command fails.
+    This command makes sure that the package has only `LICENSE`, `README.md`, `package.json`, `src/index.d.ts`, and `src/index.js`. If a file is missing or extra, the command fails.
 
-10. Run `npm login`.
-11. Run `npm publish --access public`.
-12. Run `git tag -a v0.1.0 -m v0.1.0`.
-13. Run `git push origin v0.1.0`.
+11. Run `npm login`.
+12. Run `npm publish --access public`.
+13. Run `git tag -a v0.1.0 -m v0.1.0`.
+14. Run `git push origin v0.1.0`.
 
 The release workflow runs the tests. It finds 0.1.0 on npm, and it does not publish it again. Version 0.1.0 has no provenance statement.
 
@@ -80,6 +102,7 @@ After the workflow publishes a version with the trusted publisher, you can make 
 - If the step **Make sure that the tag is on main** fails, the tagged commit is not on `main`. Remove the tag. Merge the change into `main`. Tag the commit on `main` with the same version. Then push the tag.
 - If the tests fail, the workflow does not publish the package. This also applies to the type tests, the check of the package files, and the build of the example. Remove the tag. Correct the error on `main`. Tag the new commit with the same version. Then push the tag.
 - If the step **Publish to npm** fails with `ENEEDAUTH` or `E404 Not Found`, open the trusted publisher on npmjs.com. Compare it with the values in [Add the trusted publisher](#add-the-trusted-publisher). You cannot edit a trusted publisher on npmjs.com. If a value is incorrect, delete the trusted publisher. Add it again. Then, in less than 2 days, select **Re-run jobs** on the page of the workflow run.
+- If the step **Publish to npm** fails with `E422` and `Unsupported GitHub Actions source repository visibility`, the repository is private. Do the procedure in [Make the repository public](#make-the-repository-public). Then select **Re-run jobs** on the page of the workflow run.
 - If the trusted publisher expired, delete it on npmjs.com. Add it again. Then, in less than 2 days, select **Re-run jobs** on the page of the workflow run.
 
 npm does not accept the same version two times. If npm has the version, the workflow does not publish it again.
