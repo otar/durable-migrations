@@ -275,7 +275,7 @@ describe("the storage", () => {
 
     const error = await migrateError(object, migrations);
 
-    expect(error.message).toMatch(/SQL is not enabled for this Durable Object class/);
+    expect(error.message).toMatch(/^SQL is not enabled for this Durable Object class/);
   });
 
   // Each getStorage() gets ctx and a spy for transactionSync().

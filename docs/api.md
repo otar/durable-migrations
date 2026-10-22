@@ -10,7 +10,7 @@ The runner runs the migrations that did not run on the object before. It is sync
 
 ## Parameters
 
-- `storage`: the `ctx.storage` of the Durable Object. Do not give `ctx` or `ctx.storage.sql`. The class of the object must be SQLite-backed (`new_sqlite_classes`).
+- `storage`: the `ctx.storage` of the Durable Object. Do not give `ctx` or `ctx.storage.sql`. The class of the object must be SQLite-backed: `"storage": "sqlite"` in `exports`, or `new_sqlite_classes` in `migrations` in the Wrangler configuration file.
 - `migrations`: an object with all migrations, in order. Each key is the name of a migration, and each value is its SQL:
   - The version of a migration is its position in the list. The first key is version 1, the second key is version 2, and more.
   - The name is a string that is not empty and not only white space. It must not contain only digits, and it must not be `__proto__`. The runner records the name in `_migrations` and compares it at each start.
@@ -73,6 +73,9 @@ The runner throws an error in these conditions. Each message starts with `[migra
   - If the list has a property with the name `__proto__`, for example from `JSON.parse()`, the runner throws an `Error`: `[migrations] Do not use the name "__proto__". In an object literal, JavaScript makes no property for this key, and the migration is lost.`
   - If a value is not a string, or if it is empty or only white space, the runner throws an `Error`. Example: `[migrations] Migration 2 (add_users_email) must have SQL. The value must be a string that is not empty and not only white space.`
 - **The options are not correct.** If `options` is not an object, the runner throws a `TypeError`. If the logger does not have the functions `log()` and `warn()`, the runner also throws a `TypeError`.
+- **The runner cannot read `_migrations`.** Other code made a table or a view with the name `_migrations` without the column `version` or `name`. The runner throws an `Error`, and no migration runs. The `cause` property of this error contains the original error. Example: `[migrations] The runner cannot read the table _migrations. Make sure that no other code uses this table name. Cause: no such column: version at offset 7: SQLITE_ERROR`
+  - The runner does not find all tables from other code. If a table or a view has the columns `version` and `name`, the runner reads it.
+  - If an index has the name `_migrations`, the error does not start with `[migrations]`. Example: `there is already an index named _migrations: SQLITE_ERROR`
 - **A name is different.** A row in `_migrations` has a name that is different from the name at the same position in the list. The runner throws an `Error`, and no migration runs. Example: `[migrations] Migration 2 ran with the name "add_email". The list has the name "add_users_email" at position 2. Do not change, move, or remove a deployed migration. Put "add_email" back at position 2, and add your change as a new migration at the end.`
 - **A migration fails.** SQLite cancels all new migrations, and the runner throws an `Error`. The `cause` property of this error contains the original error. Example: `[migrations] Migration 5 (add_index) failed. The database stays at version 3. Cause: no such table: main.orders: SQLITE_ERROR`
 - **Rows break a foreign key after the new migrations.** If a new migration contains `defer_foreign_keys`, or if `PRAGMA defer_foreign_keys` is ON after the new migrations, the runner runs `PRAGMA foreign_key_check`. If this check finds rows that break a foreign key, SQLite cancels all new migrations, and the runner throws an `Error`. The message gives the tables, not the migration. Example: `[migrations] The new migrations left rows that break a foreign key in these tables: orders. The database stays at version 2.` See [Rebuild a table](rebuild-a-table.md).
@@ -80,7 +83,7 @@ The runner throws an error in these conditions. Each message starts with `[migra
 
 In all these conditions, the database does not change. If the error occurs after a new migration ran, SQLite cancels all new migrations. If the error occurs in steps 2 to 7 of [How the runner operates](how-it-works.md#how-the-runner-operates), the runner also sets `PRAGMA defer_foreign_keys` to OFF.
 
-Errors from Cloudflare do not start with `[migrations]`. An example is the error for an object without SQLite. A class in `new_classes` uses the old key-value storage. In an object of this class, the runner fails with an error that starts with `SQL is not enabled for this Durable Object class.` This error also says that you cannot change the storage of a class after you deploy it to production.
+Errors from Cloudflare do not start with `[migrations]`. An example is the error for an object without SQLite. A class in `new_classes`, or with `"storage": "legacy-kv"` in `exports`, uses the old key-value storage. In an object of this class, the runner fails with an error that starts with `SQL is not enabled for this Durable Object class.` This error also says that you cannot change the storage of a class after you deploy it to production.
 
 If the database version is higher than the last version in the list, the runner does not throw an error. It calls `logger.warn()`, and no migration runs. Example:
 

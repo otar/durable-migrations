@@ -56,6 +56,20 @@ describe("a new database", () => {
     expect(logger.warn).not.toHaveBeenCalled();
   });
 
+  // The table and its columns are part of the API. See "Versions" in docs/api.md.
+  it("creates the table _migrations with the columns of the API and without an index", async () => {
+    const object = newObject();
+
+    await migrate(object, {});
+
+    expect(await query(object, "SELECT * FROM pragma_table_info('_migrations')")).toEqual([
+      { cid: 0, name: "version", type: "INTEGER", notnull: 0, dflt_value: null, pk: 1 },
+      { cid: 1, name: "name", type: "TEXT", notnull: 1, dflt_value: null, pk: 0 },
+      { cid: 2, name: "applied_at", type: "TEXT", notnull: 1, dflt_value: "datetime('now')", pk: 0 },
+    ]);
+    expect(await query(object, "SELECT * FROM pragma_index_list('_migrations')")).toEqual([]);
+  });
+
   it("returns 0 for an empty object and creates an empty table _migrations", async () => {
     const object = newObject();
     const logger = recordingLogger();
@@ -246,6 +260,40 @@ describe("a logger that throws an error", () => {
     expect(await history(object)).toEqual([
       [1, "create_users"],
       [2, "create_orders"],
+    ]);
+  });
+});
+
+// The runner calls log() and warn() as methods of the logger.
+// Thus a method of a class instance can use "this".
+describe("a logger that is a class instance", () => {
+  class Logger {
+    lines = [];
+
+    log(message) {
+      this.lines.push(["log", message]);
+    }
+
+    warn(message) {
+      this.lines.push(["warn", message]);
+    }
+  }
+
+  it("gets each line", async () => {
+    const object = newObject();
+    const logger = new Logger();
+
+    await migrate(object, take(2), { logger });
+    await migrate(object, take(1), { logger });
+
+    expect(logger.lines).toEqual([
+      ["log", "[migrations] Migration 1 (create_users) ran."],
+      ["log", "[migrations] Migration 2 (create_orders) ran."],
+      [
+        "warn",
+        "[migrations] The database is at version 2. " +
+          "The code has migrations only up to version 1. No migration ran.",
+      ],
     ]);
   });
 });

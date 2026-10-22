@@ -14,7 +14,10 @@
 // - A name must not contain only digits, for example "42". Do not use
 //   the name "__proto__".
 // - Keep all migrations in this one object literal. Do not use spread
-//   (...), Object.assign(), or "import * as". Do not sort the keys.
+//   (...), Object.assign(), or "import * as". Do not sort the keys. If your
+//   linter configuration turns on a rule for sorted keys, turn off that
+//   rule for this file. See "Linters that sort the keys" in the docs of
+//   durable-migrations.
 // - After you deploy a migration, do not change it, move it, or remove it.
 //   If you rename or move it, the runner throws an error, and the object
 //   does not start. To correct an error, add a new migration.

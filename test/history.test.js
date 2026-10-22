@@ -11,6 +11,16 @@ import {
   take,
 } from "./helpers.js";
 
+// The error for a migration that ran with a different name at the same position.
+function nameError(version, ranName, listName) {
+  return (
+    `[migrations] Migration ${version} ran with the name "${ranName}". ` +
+    `The list has the name "${listName}" at position ${version}. ` +
+    "Do not change, move, or remove a deployed migration. " +
+    `Put "${ranName}" back at position ${version}, and add your change as a new migration at the end.`
+  );
+}
+
 describe("a database with a higher version than the list", () => {
   // This occurs after a rollback of a deployment.
   it("writes one warning, runs no migration, and returns the version of the database", async () => {
@@ -77,12 +87,7 @@ describe("the name check", () => {
     const error = await migrateError(object, renamed, { logger });
 
     expect(error.constructor).toBe(Error);
-    expect(error.message).toBe(
-      '[migrations] Migration 1 ran with the name "create_users". ' +
-        'The list has the name "create_people" at position 1. ' +
-        "Do not change, move, or remove a deployed migration. " +
-        'Put "create_users" back at position 1, and add your change as a new migration at the end.',
-    );
+    expect(error.message).toBe(nameError(1, "create_users", "create_people"));
     expect(await tableNames(object)).not.toContain("products");
     expect(await history(object)).toEqual([
       [1, "create_users"],
@@ -135,6 +140,47 @@ describe("the name check", () => {
 
     expect(error.message).toMatch(/^\[migrations\] Migration 3 ran with the name "create_products"\. /);
     expect(await tableNames(object)).not.toContain("invoices");
+  });
+
+  it("throws when two migrations that ran change places", async () => {
+    const object = newObject();
+    await migrate(object, take(2));
+    const logger = recordingLogger();
+
+    const error = await migrateError(
+      object,
+      { create_orders: migrations.create_orders, create_users: migrations.create_users },
+      { logger },
+    );
+
+    expect(error.message).toBe(nameError(1, "create_users", "create_orders"));
+    expect(await history(object)).toEqual([
+      [1, "create_users"],
+      [2, "create_orders"],
+    ]);
+    expect(logger.log).not.toHaveBeenCalled();
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it("throws when a new migration comes before the migrations that ran", async () => {
+    const object = newObject();
+    await migrate(object, take(2));
+    const logger = recordingLogger();
+
+    const error = await migrateError(
+      object,
+      { create_products: migrations.create_products, ...take(2) },
+      { logger },
+    );
+
+    expect(error.message).toBe(nameError(1, "create_users", "create_products"));
+    expect(await tableNames(object)).not.toContain("products");
+    expect(await history(object)).toEqual([
+      [1, "create_users"],
+      [2, "create_orders"],
+    ]);
+    expect(logger.log).not.toHaveBeenCalled();
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 
   it("throws when the database has a higher version and a name in the list is different", async () => {

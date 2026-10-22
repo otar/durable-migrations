@@ -1,0 +1,15 @@
+// The same type tests with "moduleResolution": "node", as in a project with TypeScript 5.
+// TypeScript 7 does not support "node". Thus only "npm run test:types:compat" uses this file.
+//
+// With "node", tsc does not read "exports". Thus tsc does not find the package by its name.
+// "paths" gives the root folder of the package. Then tsc reads "types" and "main" of
+// package.json, as in a project that installs the package.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "moduleResolution": "node",
+    "paths": {
+      "durable-migrations": ["../.."]
+    }
+  }
+}

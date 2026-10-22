@@ -14,6 +14,7 @@ This is the first version as an npm package. Before this version, you copied the
 - A storage check. If `storage` is not an object, the runner throws a `TypeError`. If `storage` does not have the function `transactionSync()`, or if it does not have the property `sql`, the runner also throws a `TypeError`. Examples are `ctx` and `ctx.storage.sql`. The runner does this check first, before it changes the database. The message is: `[migrations] The storage must be ctx.storage, the storage of the Durable Object. Do not give ctx or ctx.storage.sql.`
   - The storage of a class without SQLite passes this check. For this storage, the error from Cloudflare starts with `SQL is not enabled for this Durable Object class.`
   - Before, the runner threw a `TypeError` without `[migrations]`, for example `storage.transactionSync is not a function`.
+- A `[migrations]` error when the runner cannot read `_migrations`. An example is a table or a view from other code without the column `version` or `name`. The message starts with `[migrations] The runner cannot read the table _migrations.` The `cause` property contains the error of SQLite. Before, the runner threw the error of SQLite without `[migrations]`. See [Errors and warnings](docs/api.md#errors-and-warnings).
 - A name check of the migrations that ran. At each start, the runner compares the names in `_migrations` with the names at the same positions in the list. If a name is different, the runner throws an error, and no migration runs. The error gives the position, the name in `_migrations`, and the name in the list.
 - A hint for comments or extra semicolons after the last statement. If `sql.exec()` fails with `SQL code did not contain a statement.`, the runner adds this hint to the error: `The SQL must end with a statement. Remove comments and extra semicolons after the last statement.` A migration that has only a comment gets the same hint.
 - A foreign key check after the new migrations. If a new migration contains `defer_foreign_keys`, or if `PRAGMA defer_foreign_keys` is ON after the new migrations, the runner runs `PRAGMA foreign_key_check` before the transaction ends. If no migration runs, the runner does not do this check.
@@ -25,11 +26,28 @@ This is the first version as an npm package. Before this version, you copied the
 - The option `logger`. The runner sends its log lines and its warnings to this object. The default is `console`.
 - The runner ignores errors from the logger. Thus a logger error does not stop the object and does not cancel the migrations that ran. The runner also ignores a rejected promise from an async logger.
 - Tests that run the runner in workerd with Vitest and `@cloudflare/vitest-plugin`.
+  - The tests include a deployed migration that moved, and a new migration before the deployed migrations. They also include a table, a view, and an index with the name `_migrations` from other code.
+  - The tests of the foreign key check use `defer_foreign_keys` in lower case, upper case, and mixed case. One test sets the pragma to ON before the call.
+  - Other tests count the SQL statements of a start, check the columns of `_migrations`, and use a logger that is a class instance.
 - Type tests in `test/types`. `npm run test:types` runs `tsc` on correct and incorrect calls of `runMigrations()`, in TypeScript and in JavaScript with `// @ts-check`. It does the tests with `"moduleResolution": "bundler"`, with `"nodenext"`, and with `"exactOptionalPropertyTypes": true`. It also checks `src/index.d.ts` without `@cloudflare/workers-types`.
+- Type tests with TypeScript 5.9.3. `npm run test:types` uses TypeScript 7. `npm run test:types:compat` does the same type tests with TypeScript 5.9.3. It also does them with `"moduleResolution": "node"`. The CI workflow and the release workflow run this command after `npm run test:types`.
+  - The dev dependency `typescript-5` is TypeScript 5.9.3 with an `npm:` alias. Dependabot does not update it.
 - A check of the package files. `npm run check:package` runs `npm pack --dry-run --json`, and it compares the files with this list: `LICENSE`, `README.md`, `package.json`, `src/index.d.ts`, and `src/index.js`. If a file is missing or extra, the command gives the file and fails.
 - An example Worker in `examples/basic`.
+- More documentation:
+  - A Vitest test on an object with the old schema. The Vitest example uses `newUniqueId()`, because the plugin keeps the storage for all tests in one file. See [Do a test with Vitest on an object with the old schema](docs/test-and-deploy.md#do-a-test-with-vitest-on-an-object-with-the-old-schema).
+  - A rule for the callback of `blockConcurrencyWhile()`. Do not catch the error of the runner. If you catch it, throw it again. See [Rules](docs/writing-migrations.md#rules).
+  - A CAUTION for an object that an alarm starts. If the runner throws an error, Cloudflare can delete the alarm. See [When the migrations run](docs/how-it-works.md#when-the-migrations-run).
+  - How to measure the time of the migrations. Local tests do not stop a slow migration. See [Measure the time of the migrations](docs/test-and-deploy.md#measure-the-time-of-the-migrations).
+  - The `exports` form of the Wrangler configuration file, `"storage": "sqlite"`, next to `new_sqlite_classes`. See [Quick start](README.md#quick-start).
+  - How to stop a linter that sorts the keys of the list, and how to correct two keys with the same name. See [Linters that sort the keys](docs/writing-migrations.md#linters-that-sort-the-keys).
+  - What to do after `deleteAll()`: call `ctx.abort()`. See [Delete all data of an object](docs/how-it-works.md#delete-all-data-of-an-object).
+  - How to see the migration history of a deployed object in Data Studio. Rules that tell you not to change `_migrations` or the schema by hand. See [See the migration history](docs/how-it-works.md#see-the-migration-history) and [Rules](docs/writing-migrations.md#rules).
+  - How to keep each migration in a `.sql` file. See [Keep each migration in a .sql file](docs/writing-migrations.md#keep-each-migration-in-a-sql-file).
+  - How to change from durable-utils, `@cloudflare/actors`, Drizzle, or a runner that you wrote. See [Change from other tools](docs/change-from-other-tools.md).
 - A CI workflow. It runs on each push to `main` and on each pull request. It runs the tests and the type tests, and it checks the package files. It also builds the example. To build the example, it installs the package as from the registry.
 - A release workflow. It publishes the package to npm with trusted publishing and provenance. It publishes only from a tag that is on `main` and that has the version in `package.json`. Before it publishes, it does the same tests and checks as the CI workflow.
+- A procedure in `RELEASING.md` that makes the repository public before the first release. npm does not accept provenance from a private repository. The procedure also turns on private vulnerability reporting, secret scanning, and push protection. See [Make the repository public](RELEASING.md#make-the-repository-public).
 - The workflows refer to each action by its full commit SHA, with the version in a comment. A tag can move to different code, but a commit SHA cannot change.
 - A Dependabot configuration in `.github/dependabot.yml`. Each week, Dependabot opens pull requests for new versions of the dev dependencies and of the actions.
   - One pull request contains all version updates of the dev dependencies, because some of them must change together. For example, `vitest` is a peer dependency of `@cloudflare/vitest-plugin`.
@@ -60,6 +78,7 @@ This is the first version as an npm package. Before this version, you copied the
 ### Fixed
 
 - The procedure that rebuilds a table, in [Rebuild a table](docs/rebuild-a-table.md). The old procedure in the README failed with `FOREIGN KEY constraint failed` when rows in other tables referred to the table.
+- The statement about a rollback, in [Keep the methods compatible during a deployment](docs/test-and-deploy.md#keep-the-methods-compatible-during-a-deployment). The old README said that the schema does not cause errors during a gradual deployment or a rollback. After a rollback, and after some gradual deployments, the old code runs on the new schema. Thus each migration must be compatible with the old code. See [Keep the schema compatible with old code](docs/writing-migrations.md#keep-the-schema-compatible-with-old-code).
 
 ### Upgrade from the copied files
 

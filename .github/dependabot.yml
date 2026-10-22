@@ -6,6 +6,10 @@ updates:
   # This entry is for the package.json in the root directory. There is no entry for examples/basic.
   # The example has no package-lock.json, and it gets this package with "file:../..".
   # CI installs the newest Wrangler 4.x for the example at each run. Thus the example does not need Dependabot.
+  # Dependabot does not update a dependency with an "npm:" alias.
+  # Thus "typescript-5" stays at its version in package.json without an "ignore" entry.
+  # TypeScript 6 and 7 show an error for "moduleResolution": "node".
+  # If "typescript-5" gets these versions, "npm run test:types:compat" fails.
   - package-ecosystem: npm
     directory: /
     schedule:
